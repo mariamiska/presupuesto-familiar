@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const PERSONAS_CONOCIDAS = ['Augusto', 'Miska', 'Niños', 'Casa', 'Familia']
 
@@ -26,51 +25,62 @@ function parsearMensaje(texto: string): { monto: number; concepto: string; perso
   return { monto, concepto, persona }
 }
 
-async function analizarImagenConGemini(
+// Extrae monto, fecha y proveedor del texto crudo del OCR
+function parsearTextoOcr(texto: string): { monto: number; concepto: string; persona: string; fecha: string } {
+  const hoy = new Date().toISOString().split('T')[0]
+
+  // Monto: buscar patrones como 150.000, 1.500.000, 50000, etc.
+  const montoMatch = texto.match(/(?:total|monto|importe|gs\.?|₲)\s*[:\s]?\s*([\d.,]+)/i)
+    || texto.match(/([\d]{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?)/g)?.slice(-1)
+  let monto = 0
+  if (montoMatch) {
+    const raw = (Array.isArray(montoMatch) ? montoMatch[0] : montoMatch[1]).replace(/\./g, '').replace(',', '.')
+    monto = Math.round(parseFloat(raw))
+  }
+
+  // Fecha: DD/MM/YYYY o YYYY-MM-DD
+  const fechaMatch = texto.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/)
+    || texto.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/)
+  let fecha = hoy
+  if (fechaMatch) {
+    const [, a, b, c] = fechaMatch
+    fecha = c.length === 4 ? `${c}-${b}-${a}` : `${a}-${b}-${c}`
+  }
+
+  // Proveedor: primera línea no vacía del texto
+  const lineas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 3)
+  const concepto = lineas[0] || 'Comprobante'
+
+  return { monto, concepto, persona: '', fecha }
+}
+
+async function analizarImagenConOcr(
   imageBase64: string,
   mimeType: string
 ): Promise<{ monto: number; concepto: string; persona: string; fecha: string } | null> {
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const formData = new FormData()
+    formData.append('base64Image', `data:${mimeType};base64,${imageBase64}`)
+    formData.append('language', 'spa')
+    formData.append('isOverlayRequired', 'false')
+    formData.append('detectOrientation', 'true')
+    formData.append('scale', 'true')
+    formData.append('OCREngine', '2')
+    formData.append('apikey', process.env.OCR_SPACE_API_KEY!)
 
-    // Mismo prompt que /api/ocr
-    const prompt = `Sos un asistente de finanzas personales para una familia paraguaya. Analizá este comprobante (ticket, factura o transferencia bancaria) y extraé los datos en JSON.
+    const res = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json()
 
-Personas posibles: ${PERSONAS_CONOCIDAS.join(', ')}.
-Si el titular es "Augusto Nicolas Servin Pappalardo" → persona = "Augusto".
-Si el titular es "Miska" o nombre femenino → persona = "Miska".
-Si no podés determinar → persona = "".
+    const texto = data?.ParsedResults?.[0]?.ParsedText
+    if (!texto) return null
 
-Respondé SOLO con JSON válido, sin texto adicional:
-{
-  "monto": número en guaraníes (sin puntos ni comas),
-  "proveedor": "nombre del proveedor o beneficiario",
-  "fecha": "YYYY-MM-DD",
-  "tipo": "transferencia" | "compra" | "pago_servicio" | "otro",
-  "persona_sugerida": "Augusto" | "Miska" | "Niños" | "Casa" | "Familia" | "",
-  "concepto_sugerido": "categoría sugerida en español",
-  "referencia": "número de operación o referencia si existe"
-}`
+    const parsed = parsearTextoOcr(texto)
+    if (parsed.monto <= 0) return null
 
-    const result = await model.generateContent([
-      { inlineData: { mimeType, data: imageBase64 } },
-      prompt,
-    ])
-
-    const text = result.response.text()
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return null
-
-    const data = JSON.parse(jsonMatch[0])
-    if (!data.monto || data.monto <= 0) return null
-
-    return {
-      monto: Math.round(data.monto),
-      concepto: data.concepto_sugerido || data.proveedor || 'Comprobante',
-      persona: data.persona_sugerida || '',
-      fecha: data.fecha || new Date().toISOString().split('T')[0],
-    }
+    return parsed
   } catch {
     return null
   }
@@ -212,7 +222,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      const ocr = await analizarImagenConGemini(imagen.base64, imagen.mimeType)
+      const ocr = await analizarImagenConOcr(imagen.base64, imagen.mimeType)
 
       if (!ocr) {
         await enviarRespuesta(
