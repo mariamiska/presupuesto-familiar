@@ -18,8 +18,9 @@ export async function GET(req: NextRequest) {
   } else if (mes) {
     const m = parseInt(mes)
     const a = parseInt(anio)
+    const ultimoDiaMes = new Date(a, m, 0).getDate()
     const inicio = `${a}-${String(m).padStart(2,'0')}-01`
-    const fin = `${a}-${String(m).padStart(2,'0')}-31`
+    const fin = `${a}-${String(m).padStart(2,'0')}-${String(ultimoDiaMes).padStart(2,'0')}`
     query = query.gte('fecha', inicio).lte('fecha', fin)
   }
 

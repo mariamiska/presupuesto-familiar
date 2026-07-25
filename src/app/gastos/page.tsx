@@ -32,6 +32,7 @@ const RECURRENCIA_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 const mesActual = new Date().getMonth() + 1
+const anioActual = new Date().getFullYear()
 
 export default function GastosPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
@@ -49,6 +50,7 @@ export default function GastosPage() {
   const [tipoRecurrencia, setTipoRecurrencia] = useState<TipoRecurrencia>(null)
 
   const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
+  const [anioSeleccionado, setAnioSeleccionado] = useState(anioActual)
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [cargando, setCargando] = useState(true)
   const [filtroPersona, setFiltroPersona] = useState('')
@@ -81,11 +83,11 @@ export default function GastosPage() {
 
   const cargarGastos = useCallback(async () => {
     setCargando(true)
-    const res = await fetch(`/api/gastos?mes=${mesSeleccionado}`)
+    const res = await fetch(`/api/gastos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`)
     const data = await res.json()
     setGastos(Array.isArray(data) ? data : [])
     setCargando(false)
-  }, [mesSeleccionado])
+  }, [mesSeleccionado, anioSeleccionado])
 
   useEffect(() => { cargarGastos() }, [cargarGastos])
 
@@ -217,7 +219,7 @@ export default function GastosPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `gastos-${MESES[mesSeleccionado - 1].toLowerCase()}.csv`
+    a.download = `gastos-${MESES[mesSeleccionado - 1].toLowerCase()}-${anioSeleccionado}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -391,6 +393,10 @@ export default function GastosPage() {
                 className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none">
                 {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
+              <select value={anioSeleccionado} onChange={e => setAnioSeleccionado(parseInt(e.target.value))}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none">
+                {[anioActual, anioActual - 1, anioActual - 2].map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
             </div>
           </div>
 
@@ -448,7 +454,7 @@ export default function GastosPage() {
           </div>
         ) : gastosFiltrados.length === 0 ? (
           <div className="py-12 text-center text-gray-400 text-sm">
-            {hayFiltro ? 'Sin resultados para este filtro' : `Sin gastos para ${MESES[mesSeleccionado - 1]}`}
+            {hayFiltro ? 'Sin resultados para este filtro' : `Sin gastos para ${MESES[mesSeleccionado - 1]} ${anioSeleccionado}`}
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
