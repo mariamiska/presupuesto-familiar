@@ -90,7 +90,6 @@ export default function FacturasPage() {
   const [descripcion, setDescripcion] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
   const [fecha, setFecha] = useState('')
-  const [nota, setNota] = useState('')
 
   useEffect(() => {
     setClipboardSoportado(
@@ -109,7 +108,7 @@ export default function FacturasPage() {
   async function handleFile(file: File) {
     setImagen(file)
     setOcrHecho(false); setError(null); setGuardado(false)
-    setMonto(''); setPersona(''); setDescripcion(''); setCategoriaId(''); setFecha(''); setNota('')
+    setMonto(''); setPersona(''); setDescripcion(''); setCategoriaId(''); setFecha('')
     setPreview(URL.createObjectURL(file))
     setCargando(true)
     try {
@@ -156,7 +155,7 @@ export default function FacturasPage() {
   function reset() {
     setImagen(null); setPreview(null); setOcrHecho(false); setGuardado(false)
     setMonto(''); setPersona(''); setDescripcion(''); setCategoriaId('')
-    setFecha(''); setNota(''); setError(null)
+    setFecha(''); setError(null)
   }
 
   async function guardarGasto() {
@@ -172,10 +171,9 @@ export default function FacturasPage() {
         body: JSON.stringify({
           fecha,
           persona_nombre: persona,
-          descripcion: descripcion || nota || 'Comprobante',
+          descripcion: descripcion || 'Comprobante',
           categoria_id: categoriaId,
           monto: montoNum,
-          nota,
           fuente: 'ocr',
         }),
       })
@@ -296,18 +294,10 @@ export default function FacturasPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
-                  <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Nota</label>
-                  <input type="text" value={nota} onChange={e => setNota(e.target.value)}
-                    placeholder="Opcional"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
+                <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
 
               {error && (
