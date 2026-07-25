@@ -4,9 +4,6 @@ import { TrendingUp, TrendingDown, Minus, AlertCircle } from 'lucide-react'
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
 
-const MES_ACTUAL = new Date().getMonth() + 1
-const ANIO_ACTUAL = new Date().getFullYear()
-
 function semaforoColor(pct: number) {
   if (pct >= 5) return { label: '✓ Meta cumplida', text: 'text-emerald-700', bg: 'bg-emerald-500' }
   if (pct >= 0) return { label: '⚠ Cerca de la meta', text: 'text-amber-700', bg: 'bg-amber-400' }
@@ -14,6 +11,8 @@ function semaforoColor(pct: number) {
 }
 
 export default async function Dashboard() {
+  const MES_ACTUAL = new Date().getMonth() + 1
+  const ANIO_ACTUAL = new Date().getFullYear()
   const db = supabaseAdmin()
   const mesIdx = MES_ACTUAL - 1
 

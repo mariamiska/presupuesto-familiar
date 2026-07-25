@@ -3,10 +3,9 @@ export const dynamic = 'force-dynamic'
 import { supabaseAdmin } from '@/lib/supabase'
 import SimularClient from './SimularClient'
 
-const MES_ACTUAL = new Date().getMonth() + 1
-const ANIO_ACTUAL = new Date().getFullYear()
-
 export default async function SimularPage() {
+  const MES_ACTUAL = new Date().getMonth() + 1
+  const ANIO_ACTUAL = new Date().getFullYear()
   const db = supabaseAdmin()
   const { data: ingresosData } = await db
     .from('ingresos')

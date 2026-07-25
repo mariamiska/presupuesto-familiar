@@ -2,9 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 
-const ANIO = new Date().getFullYear()
-
 export default async function ReportesPage() {
+  const ANIO = new Date().getFullYear()
   const db = supabaseAdmin()
   const { data: ingresosData } = await db
     .from('ingresos')
