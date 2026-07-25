@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const nroMatch = text.match(/(\d{9})Nro Préstamo:/) || text.match(/Nro Préstamo:\s*(\d+)/)
     const nroPrestamo = nroMatch?.[1] ?? null
 
-    const clienteMatch = text.match(/Cliente:(.*?)Documento:/s)
+    const clienteMatch = text.match(/Cliente:([\s\S]*?)Documento:/)
     const cliente = clienteMatch?.[1]?.trim() ?? null
 
     // Extraer filas de la tabla de cuotas
