@@ -33,7 +33,7 @@ Respondé SOLO con JSON válido, sin texto adicional:
   "referencia": "número de operación o referencia si existe"
 }`
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const result = await model.generateContent([
       { inlineData: { mimeType, data: base64 } },
       prompt,
