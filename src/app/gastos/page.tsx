@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search, Repeat2 } from 'lucide-react'
+import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search, Repeat2, XCircle } from 'lucide-react'
 import { MESES, formatGsCompleto } from '@/lib/supabase'
 
 type Persona = { id: string; nombre: string; color: string }
@@ -20,6 +20,7 @@ type Gasto = {
   cuotas_total?: number
   fecha_vencimiento?: string
   tipo_recurrencia?: TipoRecurrencia
+  suscripcion_id?: string
   personas?: { nombre: string; color: string }
   conceptos?: { nombre: string }
 }
@@ -63,6 +64,7 @@ export default function GastosPage() {
   const [editTipoRecurrencia, setEditTipoRecurrencia] = useState<TipoRecurrencia>(null)
   const [guardandoEdit, setGuardandoEdit] = useState(false)
   const [eliminando, setEliminando] = useState(false)
+  const [cancelandoSuscripcion, setCancelandoSuscripcion] = useState(false)
 
   const [conceptosEdit, setConceptosEdit] = useState<Concepto[]>([])
 
@@ -174,6 +176,21 @@ export default function GastosPage() {
     })
 
     setGuardandoEdit(false)
+    setGastoEditando(null)
+    cargarGastos()
+  }
+
+  async function cancelarSuscripcion() {
+    if (!gastoEditando) return
+    const label = gastoEditando.tipo_recurrencia === 'fijo' ? 'gasto fijo' : 'suscripción'
+    if (!confirm(`¿Cancelar esta ${label}? Los meses siguientes al actual se eliminarán.`)) return
+    setCancelandoSuscripcion(true)
+    await fetch(`/api/gastos/${gastoEditando.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancelar_suscripcion' }),
+    })
+    setCancelandoSuscripcion(false)
     setGastoEditando(null)
     cargarGastos()
   }
@@ -580,6 +597,20 @@ export default function GastosPage() {
               </div>
             </div>
 
+            {gastoEditando.suscripcion_id && (
+              <div className="px-5 pb-3">
+                <button
+                  onClick={cancelarSuscripcion}
+                  disabled={cancelandoSuscripcion}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-40"
+                >
+                  {cancelandoSuscripcion
+                    ? <Loader2 size={14} className="animate-spin"/>
+                    : <XCircle size={14}/>}
+                  {gastoEditando.tipo_recurrencia === 'fijo' ? 'Cancelar gasto fijo' : 'Cancelar suscripción'}
+                </button>
+              </div>
+            )}
             <div className="px-5 pb-5 flex gap-2">
               <button
                 onClick={guardarEdicion}

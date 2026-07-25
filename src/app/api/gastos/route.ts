@@ -32,11 +32,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { fecha, persona_nombre, concepto_nombre, monto, nota, fuente = 'manual' } = body
+    const { fecha, persona_nombre, concepto_nombre, monto, nota, fuente = 'manual', tipo_recurrencia } = body
 
     const db = supabaseAdmin()
 
-    // Buscar persona por nombre
     const { data: persona } = await db
       .from('personas')
       .select('id')
@@ -45,7 +44,6 @@ export async function POST(req: NextRequest) {
 
     if (!persona) return NextResponse.json({ error: `Persona "${persona_nombre}" no encontrada` }, { status: 400 })
 
-    // Buscar o crear concepto
     let { data: concepto } = await db
       .from('conceptos')
       .select('id')
@@ -64,12 +62,28 @@ export async function POST(req: NextRequest) {
 
     if (!concepto) return NextResponse.json({ error: 'No se pudo crear el concepto' }, { status: 500 })
 
-    const { tipo_recurrencia } = body
+    const fechaBase = fecha ?? new Date().toISOString().split('T')[0]
+
+    if (tipo_recurrencia === 'suscripcion' || tipo_recurrencia === 'fijo') {
+      const gastos = crearGastosRecurrentes({
+        fechaBase,
+        concepto_id: concepto.id,
+        persona_id: persona.id,
+        monto: parseInt(monto),
+        nota: nota ?? '',
+        fuente,
+        tipo_recurrencia,
+      })
+
+      const { data, error } = await db.from('gastos').insert(gastos).select().order('fecha', { ascending: true })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(data[0])
+    }
 
     const { data, error } = await db
       .from('gastos')
       .insert({
-        fecha: fecha ?? new Date().toISOString().split('T')[0],
+        fecha: fechaBase,
         concepto_id: concepto.id,
         persona_id: persona.id,
         monto: parseInt(monto),
@@ -86,4 +100,42 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error interno' }, { status: 500 })
   }
+}
+
+function crearGastosRecurrentes({
+  fechaBase,
+  concepto_id,
+  persona_id,
+  monto,
+  nota,
+  fuente,
+  tipo_recurrencia,
+}: {
+  fechaBase: string
+  concepto_id: string
+  persona_id: string
+  monto: number
+  nota: string
+  fuente: string
+  tipo_recurrencia: 'suscripcion' | 'fijo'
+}) {
+  const suscripcion_id = crypto.randomUUID()
+  const [anio, mesInicio, dia] = fechaBase.split('-').map(Number)
+  const gastos = []
+
+  for (let mes = mesInicio; mes <= 12; mes++) {
+    gastos.push({
+      fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
+      concepto_id,
+      persona_id,
+      monto,
+      nota,
+      fuente,
+      pendiente_confirmacion: false,
+      tipo_recurrencia,
+      suscripcion_id,
+    })
+  }
+
+  return gastos
 }
