@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import React from 'react'
-import { TrendingUp, TrendingDown, Minus, AlertCircle, Bell, ArrowDownCircle, ArrowUpCircle, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, AlertCircle, Bell, ArrowDownCircle, ArrowUpCircle, Wallet, CreditCard } from 'lucide-react'
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
 
@@ -46,6 +46,7 @@ export default async function Dashboard() {
     { data: presupuestoData },
     { data: ingresosAnuales },
     { data: gastosAnuales },
+    { data: deudasActivas },
   ] = await Promise.all([
     db.from('ingresos').select('monto').eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
     db.from('gastos').select('monto, persona_id, personas(nombre, color)')
@@ -68,6 +69,11 @@ export default async function Dashboard() {
     db.from('gastos').select('fecha, monto')
       .gte('fecha', `${ANIO_ACTUAL}-01-01`)
       .lte('fecha', `${ANIO_ACTUAL}-12-31`),
+    db.from('deudas')
+      .select('id, nombre, cuota_mensual, cuotas_totales, cuotas_pagadas, personas(nombre, color)')
+      .eq('activa', true)
+      .not('cuota_mensual', 'is', null)
+      .order('cuota_mensual', { ascending: false }),
   ])
 
   const ingMes = ingresosData?.reduce((s, r) => s + r.monto, 0) ?? 0
@@ -95,6 +101,15 @@ export default async function Dashboard() {
     const m = new Date(g.fecha + 'T12:00:00').getMonth()
     gastMeses[m] += g.monto
   })
+
+  // Deudas activas con cuota — para sección virtual en dashboard
+  type DeudaActiva = {
+    id: string; nombre: string; cuota_mensual: number
+    cuotas_totales?: number | null; cuotas_pagadas?: number | null
+    personas?: { nombre: string; color: string } | null
+  }
+  const cuotasDeudas = (deudasActivas ?? []) as DeudaActiva[]
+  const totalCuotasDeuda = cuotasDeudas.reduce((s, d) => s + d.cuota_mensual, 0)
 
   const balance = ingMes - gastMes
   const pct = ingMes > 0 ? (balance / ingMes) * 100 : 0
@@ -251,6 +266,59 @@ export default async function Dashboard() {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {cuotasDeudas.length > 0 && (
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <CreditCard size={16} className="text-orange-500"/>
+              <h3 className="font-semibold text-gray-700">Cuotas de deudas este mes</h3>
+            </div>
+            <span className="text-sm font-bold text-orange-600">{formatGsCompleto(totalCuotasDeuda)}</span>
+          </div>
+          <div className="space-y-3">
+            {cuotasDeudas.map(d => {
+              const restantes = d.cuotas_totales != null && d.cuotas_pagadas != null
+                ? d.cuotas_totales - d.cuotas_pagadas
+                : null
+              const pct = d.cuotas_totales && d.cuotas_pagadas != null
+                ? Math.round((d.cuotas_pagadas / d.cuotas_totales) * 100)
+                : null
+              const color = (d.personas as { nombre: string; color: string } | null)?.color ?? '#F97316'
+              return (
+                <div key={d.id}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700">{d.nombre}</span>
+                      <span className="text-xs text-gray-400" style={{ color }}>
+                        {(d.personas as { nombre: string; color: string } | null)?.nombre}
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-semibold text-gray-800">{formatGs(d.cuota_mensual)}</span>
+                      {restantes != null && (
+                        <span className="text-xs text-gray-400 ml-2">
+                          {restantes} {restantes === 1 ? 'cuota' : 'cuotas'} restantes
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {pct !== null && (
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-orange-400 transition-all" style={{ width: `${pct}%` }}/>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {ingMes > 0 && (
+            <p className="text-xs text-gray-400 mt-4">
+              Las cuotas representan el <span className="font-semibold text-orange-500">{((totalCuotasDeuda / ingMes) * 100).toFixed(1)}%</span> de los ingresos del mes.
+            </p>
+          )}
         </div>
       )}
 

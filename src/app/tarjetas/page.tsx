@@ -30,6 +30,7 @@ export default function TarjetasPage() {
   const [limite, setLimite] = useState('')
   const [deudaActual, setDeudaActual] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [filtroPersonaId, setFiltroPersonaId] = useState<string>('todas')
 
   const cargarDatos = useCallback(async () => {
     setCargando(true)
@@ -103,9 +104,16 @@ export default function TarjetasPage() {
     cargarDatos()
   }
 
+  // Filtro por persona
+  const tarjetasFiltradas = filtroPersonaId === 'todas'
+    ? tarjetas
+    : filtroPersonaId === 'sin-asignar'
+      ? tarjetas.filter(t => !t.persona_id)
+      : tarjetas.filter(t => t.persona_id === filtroPersonaId)
+
   // Cálculos por tarjeta
-  const totalDeudasCards = tarjetas.reduce((acc, t) => acc + (t.deuda_actual || 0), 0)
-  const totalLimitesCards = tarjetas.reduce((acc, t) => acc + (t.limite || 0), 0)
+  const totalDeudasCards = tarjetasFiltradas.reduce((acc, t) => acc + (t.deuda_actual || 0), 0)
+  const totalLimitesCards = tarjetasFiltradas.reduce((acc, t) => acc + (t.limite || 0), 0)
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -126,6 +134,53 @@ export default function TarjetasPage() {
           <Plus size={18} /> Nueva tarjeta
         </button>
       </div>
+
+      {/* Filtro por persona */}
+      {personas.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filtrar por:</span>
+          <button
+            onClick={() => setFiltroPersonaId('todas')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              filtroPersonaId === 'todas'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
+            }`}
+          >
+            Todas
+          </button>
+          {personas.filter(p => ['Augusto', 'Miska'].includes(p.nombre)).map(p => (
+            <button
+              key={p.id}
+              onClick={() => setFiltroPersonaId(p.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                filtroPersonaId === p.id
+                  ? 'text-white shadow-sm'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
+              }`}
+              style={filtroPersonaId === p.id ? { backgroundColor: p.color } : {}}
+            >
+              <span
+                className="w-2 h-2 rounded-full inline-block"
+                style={{ backgroundColor: p.color }}
+              />
+              {p.nombre}
+            </button>
+          ))}
+          {tarjetas.some(t => !t.persona_id) && (
+            <button
+              onClick={() => setFiltroPersonaId('sin-asignar')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                filtroPersonaId === 'sin-asignar'
+                  ? 'bg-gray-700 text-white shadow-sm'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              Sin asignar
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Tarjetas resumen superior */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -151,7 +206,7 @@ export default function TarjetasPage() {
         <div className="flex justify-center items-center py-16 text-gray-400 gap-2">
           <Loader2 className="animate-spin" size={20} /> Cargando tarjetas...
         </div>
-      ) : tarjetas.length === 0 ? (
+      ) : tarjetasFiltradas.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm space-y-3">
           <CreditCard className="mx-auto text-gray-300" size={48} />
           <h3 className="text-lg font-semibold text-gray-700">No hay tarjetas registradas</h3>
@@ -167,7 +222,7 @@ export default function TarjetasPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {tarjetas.map(t => {
+          {tarjetasFiltradas.map(t => {
             const gastosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id)
             const montoMesActual = gastosConTarjeta.reduce((sum, g) => sum + g.monto, 0)
             const suscripcionesConTarjeta = gastosConTarjeta.filter(g => g.tipo_recurrencia === 'suscripcion' || g.tipo_recurrencia === 'fijo')
@@ -224,26 +279,42 @@ export default function TarjetasPage() {
                   </div>
                 </div>
 
-                {/* Gastos y Suscripciones vinculadas este mes */}
+                {/* Gastos del mes vinculados a esta tarjeta */}
                 <div className="bg-slate-950/60 rounded-xl p-3.5 border border-slate-800 space-y-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-300 font-medium">Cargos de este mes:</span>
                     <span className="font-bold text-emerald-400 text-sm">{formatGsCompleto(montoMesActual)}</span>
                   </div>
 
-                  {suscripcionesConTarjeta.length > 0 ? (
-                    <div className="space-y-1 pt-1.5 border-t border-slate-800/80">
-                      <span className="text-[11px] text-slate-400 block font-medium">Suscripciones en esta tarjeta:</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {suscripcionesConTarjeta.map(s => (
-                          <span key={s.id} className="text-[11px] bg-purple-950/80 text-purple-300 px-2 py-0.5 rounded border border-purple-800/50">
-                            {s.descripcion} ({formatGsCompleto(s.monto)})
-                          </span>
-                        ))}
-                      </div>
+                  {gastosConTarjeta.length > 0 ? (
+                    <div className="space-y-1 pt-1.5 border-t border-slate-800/80 max-h-40 overflow-y-auto">
+                      {gastosConTarjeta.map(g => {
+                        const esSub = g.tipo_recurrencia === 'suscripcion' || g.tipo_recurrencia === 'fijo'
+                        return (
+                          <div key={g.id} className="flex items-center justify-between gap-2 py-0.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {g.categorias ? (
+                                <span className="text-[11px] shrink-0">{g.categorias.icono}</span>
+                              ) : (
+                                <span className="text-[11px] shrink-0">💳</span>
+                              )}
+                              <span className="text-[11px] text-slate-200 truncate">{g.descripcion || '—'}</span>
+                              {esSub && (
+                                <span className="text-[10px] bg-purple-950/80 text-purple-300 px-1.5 py-0.5 rounded border border-purple-800/50 shrink-0">
+                                  {g.tipo_recurrencia === 'suscripcion' ? 'Sub' : 'Fijo'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] text-slate-400">{new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' })}</span>
+                              <span className="text-[11px] font-semibold text-amber-400">{formatGsCompleto(g.monto)}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-slate-500 italic">Sin suscripciones o gastos vinculados este mes</p>
+                    <p className="text-[11px] text-slate-500 italic">Sin gastos vinculados este mes</p>
                   )}
                 </div>
               </div>

@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { fecha, persona_nombre, descripcion, categoria_id, tarjeta_id, monto, nota, fuente = 'manual', tipo_recurrencia } = body
+    const { fecha, persona_nombre, descripcion, categoria_id, tarjeta_id, monto, nota, fuente = 'manual', tipo_recurrencia, cuota_actual, cuotas_total, fecha_vencimiento } = body
 
     const db = supabaseAdmin()
 
@@ -78,11 +78,23 @@ export async function POST(req: NextRequest) {
         fuente,
         pendiente_confirmacion: false,
         tipo_recurrencia: tipo_recurrencia ?? null,
+        cuota_actual: cuota_actual ?? null,
+        cuotas_total: cuotas_total ?? null,
+        fecha_vencimiento: fecha_vencimiento ?? null,
       })
       .select()
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    if (body.es_pago_tarjeta && tarjeta_id) {
+      const { data: tarjeta } = await db.from('tarjetas').select('deuda_actual').eq('id', tarjeta_id).single()
+      if (tarjeta) {
+        const nuevaDeuda = Math.max(0, (tarjeta.deuda_actual ?? 0) - montoNum)
+        await db.from('tarjetas').update({ deuda_actual: nuevaDeuda }).eq('id', tarjeta_id)
+      }
+    }
+
     return NextResponse.json(data)
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error interno' }, { status: 500 })

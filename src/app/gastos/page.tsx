@@ -10,7 +10,7 @@ const FUENTE_LABEL: Record<string, string> = { manual: '✏️', ocr: '📷', wh
 
 type TipoRecurrencia = 'suscripcion' | 'fijo' | null
 
-type TarjetaSimple = { id: string; nombre: string; banco: string }
+type TarjetaSimple = { id: string; nombre: string; banco: string; personas?: { nombre: string } | null }
 
 type Gasto = {
   id: string
@@ -54,6 +54,10 @@ export default function GastosPage() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
   const [tipoRecurrencia, setTipoRecurrencia] = useState<TipoRecurrencia>(null)
+  const [esDeuda, setEsDeuda] = useState(false)
+  const [cuotaActual, setCuotaActual] = useState('')
+  const [cuotasTotal, setCuotasTotal] = useState('')
+  const [fechaVenc, setFechaVenc] = useState('')
 
   const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
   const [anioSeleccionado, setAnioSeleccionado] = useState(anioActual)
@@ -104,11 +108,14 @@ export default function GastosPage() {
   function resetForm() {
     setMonto(''); setNota(''); setPersona('')
     setDescripcion(''); setCategoriaId(''); setTarjetaId(''); setTipoRecurrencia(null)
+    setEsDeuda(false); setCuotaActual(''); setCuotasTotal(''); setFechaVenc('')
   }
 
   async function guardar() {
     const montoNum = parseInt(monto)
+    const esPagoTarjetaLocal = categorias.find(c => c.id === categoriaId)?.nombre === 'Pago Tarjeta'
     if (!montoNum || montoNum <= 0 || !persona || !descripcion || !categoriaId) return
+    if (esPagoTarjetaLocal && !tarjetaId) return
     setGuardando(true)
     const res = await fetch('/api/gastos', {
       method: 'POST',
@@ -116,6 +123,10 @@ export default function GastosPage() {
       body: JSON.stringify({
         fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId, tarjeta_id: tarjetaId || null,
         monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
+        cuota_actual: esDeuda && cuotaActual ? parseInt(cuotaActual) : null,
+        cuotas_total: esDeuda && cuotasTotal ? parseInt(cuotasTotal) : null,
+        fecha_vencimiento: esDeuda && fechaVenc ? fechaVenc : null,
+        es_pago_tarjeta: esPagoTarjetaLocal,
       }),
     })
     setGuardando(false)
@@ -257,6 +268,8 @@ export default function GastosPage() {
 
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
+  const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
+  const editEsPagoTarjeta = editCategoriaSeleccionada?.nombre === 'Pago Tarjeta'
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-2xl">
@@ -323,6 +336,13 @@ export default function GastosPage() {
               </div>
             </div>
 
+            {esPagoTarjeta && (
+              <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-sm text-emerald-700">
+                <span className="text-base">💳</span>
+                <span>Este pago <strong>descontará la deuda</strong> de la tarjeta seleccionada.</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
@@ -330,11 +350,15 @@ export default function GastosPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tarjeta de Crédito (opcional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tarjeta de Crédito {esPagoTarjeta ? <span className="text-rose-500">*</span> : <span className="text-gray-400">(opcional)</span>}
+                </label>
                 <select value={tarjetaId} onChange={e => setTarjetaId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
-                  <option value="">Ninguna / Efectivo</option>
-                  {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}</option>)}
+                  className={`w-full border rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 ${
+                    esPagoTarjeta && !tarjetaId ? 'border-rose-300 focus:ring-rose-300' : 'border-gray-200 focus:ring-blue-300'
+                  }`}>
+                  <option value="">{esPagoTarjeta ? 'Seleccioná la tarjeta' : 'Ninguna / Efectivo'}</option>
+                  {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}{t.personas?.nombre ? ` (${t.personas.nombre})` : ''}</option>)}
                 </select>
               </div>
             </div>
@@ -356,6 +380,36 @@ export default function GastosPage() {
                 ))}
               </div>
             </div>
+
+            <div>
+              <button type="button" onClick={() => setEsDeuda(v => !v)}
+                className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl border transition-colors ${
+                  esDeuda ? 'bg-rose-50 text-rose-600 border-rose-200' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}>
+                💳 {esDeuda ? 'Es una deuda / cuota ✓' : 'Marcar como deuda / cuota'}
+              </button>
+              {esDeuda && (
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Cuota actual</label>
+                    <input type="number" inputMode="numeric" value={cuotaActual}
+                      onChange={e => setCuotaActual(e.target.value)} placeholder="ej: 2"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Total cuotas</label>
+                    <input type="number" inputMode="numeric" value={cuotasTotal}
+                      onChange={e => setCuotasTotal(e.target.value)} placeholder="ej: 12"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Vencimiento</label>
+                    <input type="date" value={fechaVenc} onChange={e => setFechaVenc(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {guardado ? (
@@ -366,7 +420,7 @@ export default function GastosPage() {
             <div className="flex gap-3">
               <button
                 onClick={guardar}
-                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || guardando}
+                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || (esPagoTarjeta && !tarjetaId) || guardando}
                 className="flex-1 bg-emerald-600 text-white py-3.5 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95"
               >
                 {guardando && <Loader2 size={18} className="animate-spin"/>}
@@ -489,9 +543,16 @@ export default function GastosPage() {
                         {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
                       </span>
                     )}
+                    {g.categorias?.nombre === 'Pago Tarjeta' && (
+                      <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
+                        💳 Pago TC
+                      </span>
+                    )}
                     {g.tarjetas?.nombre && (
-                      <span className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-                        💳 {g.tarjetas.nombre}
+                      <span className="text-xs bg-slate-800 text-slate-100 border border-slate-700 px-2 py-0.5 rounded-md font-medium flex items-center gap-1.5">
+                        <CreditCard size={11} className="shrink-0" />
+                        <span className="text-slate-400">{g.tarjetas.banco}</span>
+                        <span>{g.tarjetas.nombre}</span>
                       </span>
                     )}
                     {g.cuota_actual && g.cuotas_total && (
@@ -579,7 +640,7 @@ export default function GastosPage() {
                     <select value={editTarjetaId} onChange={e => setEditTarjetaId(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
                       <option value="">Ninguna / Efectivo</option>
-                      {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}</option>)}
+                      {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}{t.personas?.nombre ? ` (${t.personas.nombre})` : ''}</option>)}
                     </select>
                   </div>
                 </div>
