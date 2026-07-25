@@ -1,21 +1,25 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CheckCircle, XCircle, AlertTriangle, Calculator } from 'lucide-react'
 import { MESES, formatGsCompleto } from '@/lib/supabase'
 
-const CONCEPTOS = [
-  'Alimentación','Ropa','Salud','Educación','Entretenimiento',
-  'Transporte','Combustible','Hogar','Tecnología','Viajes','Otro'
-]
 const PERSONAS = ['Augusto','Miska','Niños','Casa','Familia']
 
+type Categoria = { id: string; nombre: string; icono: string }
 type Props = { ingMes: number; gastMes: number; mesActual: number }
 
 export default function SimularClient({ ingMes, gastMes, mesActual }: Props) {
+  const [categorias, setCategorias] = useState<Categoria[]>([])
   const [monto, setMonto] = useState('')
   const [persona, setPersona] = useState('')
   const [concepto, setConcepto] = useState('')
   const [resultado, setResultado] = useState<null | ReturnType<typeof simular>>(null)
+
+  useEffect(() => {
+    fetch('/api/categorias').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setCategorias(data)
+    })
+  }, [])
 
   function simular(montoNum: number) {
     const balanceActual = ingMes - gastMes
@@ -88,7 +92,7 @@ export default function SimularClient({ ingMes, gastMes, mesActual }: Props) {
             <select value={concepto} onChange={e => setConcepto(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
               <option value="">Seleccioná</option>
-              {CONCEPTOS.map(c => <option key={c}>{c}</option>)}
+              {categorias.map(c => <option key={c.id} value={c.nombre}>{c.icono} {c.nombre}</option>)}
             </select>
           </div>
         </div>
