@@ -47,8 +47,9 @@ Respondé SOLO con JSON válido, sin texto adicional:
     return NextResponse.json(data)
   } catch (e: unknown) {
     console.error('OCR error:', e)
+    const msg = e instanceof Error ? e.message : String(e)
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error interno' },
+      { error: msg },
       { status: 500 }
     )
   }
