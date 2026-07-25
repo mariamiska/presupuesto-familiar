@@ -75,8 +75,19 @@ export default function FacturasPage() {
   }
 
   async function guardarGasto() {
-    setGuardado(true)
-    // TODO: guardar en Supabase
+    const res = await fetch('/api/gastos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fecha,
+        persona_nombre: persona,
+        concepto_nombre: concepto || 'Otro',
+        monto,
+        nota,
+        fuente: 'ocr',
+      }),
+    })
+    if (res.ok) setGuardado(true)
   }
 
   return (

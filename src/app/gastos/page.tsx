@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
-import { Plus, CheckCircle } from 'lucide-react'
-import { MESES, formatGsCompleto } from '@/lib/datos-demo'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, CheckCircle, Loader2 } from 'lucide-react'
+import { MESES, formatGsCompleto } from '@/lib/supabase'
 
 const PERSONAS = ['Augusto','Miska','Niños','Casa','Familia']
 const CONCEPTOS_POR_PERSONA: Record<string, string[]> = {
@@ -11,30 +11,61 @@ const CONCEPTOS_POR_PERSONA: Record<string, string[]> = {
   Casa:    ['Supermercado','Luz','Agua','Gas','Internet','Alquiler','Mantenimiento','Otro'],
   Familia: ['Salidas','Viajes','Regalos','Eventos','Otro'],
 }
+const FUENTE_LABEL: Record<string, string> = { manual: '✏️', ocr: '📷', whatsapp: '💬', email: '📧' }
 
-const GASTOS_DEMO = [
-  { fecha: '2026-07-24', persona: 'Augusto', concepto: 'Transferencia', monto: 104000, nota: 'Gregorio Insfran', fuente: 'ocr' },
-  { fecha: '2026-07-20', persona: 'Casa',    concepto: 'Supermercado',  monto: 450000, nota: '',              fuente: 'manual' },
-  { fecha: '2026-07-18', persona: 'Niños',   concepto: 'Cantina',       monto: 23000,  nota: 'Sebas',         fuente: 'manual' },
-]
+type Gasto = {
+  id: string
+  fecha: string
+  monto: number
+  nota?: string
+  fuente: string
+  personas?: { nombre: string; color: string }
+  conceptos?: { nombre: string }
+}
 
-const FUENTE_LABEL: Record<string, string> = { manual: '✏️ Manual', ocr: '📷 OCR', whatsapp: '💬 WhatsApp', email: '📧 Email' }
+const mesActual = new Date().getMonth() + 1
 
 export default function GastosPage() {
   const [showForm, setShowForm] = useState(false)
+  const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
   const [persona, setPersona] = useState('')
   const [concepto, setConcepto] = useState('')
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
+  const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
+  const [gastos, setGastos] = useState<Gasto[]>([])
+  const [cargando, setCargando] = useState(true)
   const conceptos = persona ? (CONCEPTOS_POR_PERSONA[persona] || []) : []
 
-  function guardar() {
+  const cargarGastos = useCallback(async () => {
+    setCargando(true)
+    const res = await fetch(`/api/gastos?mes=${mesSeleccionado}`)
+    const data = await res.json()
+    setGastos(Array.isArray(data) ? data : [])
+    setCargando(false)
+  }, [mesSeleccionado])
+
+  useEffect(() => { cargarGastos() }, [cargarGastos])
+
+  async function guardar() {
     if (!monto || !persona || !concepto) return
-    setGuardado(true)
-    setTimeout(() => { setGuardado(false); setShowForm(false); setMonto(''); setNota('') }, 2000)
+    setGuardando(true)
+    const res = await fetch('/api/gastos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha, persona_nombre: persona, concepto_nombre: concepto, monto, nota, fuente: 'manual' }),
+    })
+    setGuardando(false)
+    if (res.ok) {
+      setGuardado(true)
+      setTimeout(() => { setGuardado(false); setShowForm(false); setMonto(''); setNota(''); setPersona(''); setConcepto('') }, 1500)
+      cargarGastos()
+    }
   }
+
+  const totalMes = gastos.reduce((s, g) => s + g.monto, 0)
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -51,7 +82,6 @@ export default function GastosPage() {
         </button>
       </div>
 
-      {/* Formulario rápido */}
       {showForm && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-blue-100 space-y-4">
           <h3 className="font-semibold text-gray-700">Registrar gasto</h3>
@@ -117,9 +147,10 @@ export default function GastosPage() {
             <div className="flex gap-3">
               <button
                 onClick={guardar}
-                disabled={!monto || !persona || !concepto}
-                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-40"
+                disabled={!monto || !persona || !concepto || guardando}
+                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
               >
+                {guardando && <Loader2 size={16} className="animate-spin"/>}
                 Guardar
               </button>
               <button
@@ -133,31 +164,51 @@ export default function GastosPage() {
         </div>
       )}
 
-      {/* Historial */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="font-semibold text-gray-700">Últimos gastos</h3>
-          <select className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none">
-            {MESES.map(m => <option key={m}>{m}</option>)}
+          <div>
+            <h3 className="font-semibold text-gray-700">Gastos del mes</h3>
+            {!cargando && gastos.length > 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">Total: {formatGsCompleto(totalMes)}</p>
+            )}
+          </div>
+          <select
+            value={mesSeleccionado}
+            onChange={e => setMesSeleccionado(parseInt(e.target.value))}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none"
+          >
+            {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
           </select>
         </div>
-        <div className="divide-y divide-gray-50">
-          {GASTOS_DEMO.map((g, i) => (
-            <div key={i} className="px-5 py-3.5 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-800">{g.concepto}</span>
-                  <span className="text-xs text-gray-400">{FUENTE_LABEL[g.fuente]}</span>
+
+        {cargando ? (
+          <div className="flex items-center justify-center py-12 text-gray-400 gap-2">
+            <Loader2 className="animate-spin" size={18}/> Cargando...
+          </div>
+        ) : gastos.length === 0 ? (
+          <div className="py-12 text-center text-gray-400 text-sm">
+            Sin gastos para {MESES[mesSeleccionado - 1]}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {gastos.map(g => (
+              <div key={g.id} className="px-5 py-3.5 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-800">{g.conceptos?.nombre ?? '—'}</span>
+                    <span className="text-xs text-gray-400">{FUENTE_LABEL[g.fuente] ?? ''}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
+                    {' · '}{new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-PY')}
+                    {g.nota && ` · ${g.nota}`}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {g.persona} · {new Date(g.fecha).toLocaleDateString('es-PY')}
-                  {g.nota && ` · ${g.nota}`}
-                </p>
+                <span className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</span>
               </div>
-              <span className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

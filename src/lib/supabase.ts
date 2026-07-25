@@ -85,5 +85,11 @@ export function mesNumero(nombre: string): number {
 }
 
 export function formatGs(monto: number): string {
+  if (monto >= 1_000_000) return `₲ ${(monto / 1_000_000).toFixed(1)}M`
+  if (monto >= 1_000) return `₲ ${(monto / 1_000).toFixed(0)}K`
   return '₲ ' + monto.toLocaleString('es-PY', { maximumFractionDigits: 0 })
+}
+
+export function formatGsCompleto(monto: number): string {
+  return '₲ ' + Math.round(monto).toLocaleString('es-PY', { maximumFractionDigits: 0 })
 }
