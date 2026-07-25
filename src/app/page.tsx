@@ -11,67 +11,75 @@ function semaforoColor(pct: number) {
   return { label: '✗ Déficit', text: 'text-red-700', bg: 'bg-red-500' }
 }
 
+function primerDia(anio: number, mes: number) {
+  return `${anio}-${String(mes).padStart(2, '0')}-01`
+}
+
+function ultimoDia(anio: number, mes: number) {
+  return new Date(anio, mes, 0).toISOString().split('T')[0]
+}
+
+function deltaLabel(actual: number, anterior: number) {
+  if (anterior === 0) return null
+  const pct = ((actual - anterior) / anterior) * 100
+  const signo = pct >= 0 ? '+' : ''
+  return { pct: `${signo}${pct.toFixed(0)}%`, sube: pct > 0 }
+}
+
 export default async function Dashboard() {
   const MES_ACTUAL = new Date().getMonth() + 1
   const ANIO_ACTUAL = new Date().getFullYear()
-  const db = supabaseAdmin()
   const mesIdx = MES_ACTUAL - 1
 
-  // Ingresos del mes actual
-  const { data: ingresosData } = await db
-    .from('ingresos')
-    .select('monto')
-    .eq('mes', MES_ACTUAL)
-    .eq('anio', ANIO_ACTUAL)
+  const MES_ANT = MES_ACTUAL === 1 ? 12 : MES_ACTUAL - 1
+  const ANIO_ANT = MES_ACTUAL === 1 ? ANIO_ACTUAL - 1 : ANIO_ACTUAL
+
+  const db = supabaseAdmin()
+
+  const [
+    { data: ingresosData },
+    { data: gastosData },
+    { data: ingresosAntData },
+    { data: gastosAntData },
+    { data: vencimientos },
+    { data: personasData },
+    { data: presupuestoData },
+    { data: ingresosAnuales },
+    { data: gastosAnuales },
+  ] = await Promise.all([
+    db.from('ingresos').select('monto').eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
+    db.from('gastos').select('monto, persona_id, personas(nombre, color)')
+      .gte('fecha', primerDia(ANIO_ACTUAL, MES_ACTUAL))
+      .lte('fecha', ultimoDia(ANIO_ACTUAL, MES_ACTUAL)),
+    db.from('ingresos').select('monto').eq('mes', MES_ANT).eq('anio', ANIO_ANT),
+    db.from('gastos').select('monto')
+      .gte('fecha', primerDia(ANIO_ANT, MES_ANT))
+      .lte('fecha', ultimoDia(ANIO_ANT, MES_ANT)),
+    db.from('gastos')
+      .select('id, fecha_vencimiento, monto, conceptos(nombre), personas(nombre, color)')
+      .gte('fecha_vencimiento', new Date().toISOString().split('T')[0])
+      .lte('fecha_vencimiento', new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0])
+      .order('fecha_vencimiento', { ascending: true })
+      .limit(10),
+    db.from('personas').select('id, nombre, color').eq('activa', true).order('nombre'),
+    db.from('presupuesto').select('monto_planificado, concepto_id, conceptos(persona_id)')
+      .eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
+    db.from('ingresos').select('mes, monto').eq('anio', ANIO_ACTUAL),
+    db.from('gastos').select('fecha, monto')
+      .gte('fecha', `${ANIO_ACTUAL}-01-01`)
+      .lte('fecha', `${ANIO_ACTUAL}-12-31`),
+  ])
 
   const ingMes = ingresosData?.reduce((s, r) => s + r.monto, 0) ?? 0
-
-  // Gastos del mes actual
-  const fechaInicio = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-01`
-  const fechaFin = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-31`
-
-  const { data: gastosData } = await db
-    .from('gastos')
-    .select('monto, persona_id, personas(nombre, color)')
-    .gte('fecha', fechaInicio)
-    .lte('fecha', fechaFin)
-
   const gastMes = gastosData?.reduce((s, r) => s + r.monto, 0) ?? 0
+  const ingAnt = ingresosAntData?.reduce((s, r) => s + r.monto, 0) ?? 0
+  const gastAnt = gastosAntData?.reduce((s, r) => s + r.monto, 0) ?? 0
 
-  // Próximos vencimientos (hoy + 15 días)
-  const hoy = new Date()
-  const en15 = new Date(hoy); en15.setDate(hoy.getDate() + 15)
-  const fmtDate = (d: Date) => d.toISOString().split('T')[0]
-  const { data: vencimientos } = await db
-    .from('gastos')
-    .select('id, fecha_vencimiento, monto, conceptos(nombre), personas(nombre, color)')
-    .gte('fecha_vencimiento', fmtDate(hoy))
-    .lte('fecha_vencimiento', fmtDate(en15))
-    .order('fecha_vencimiento', { ascending: true })
-    .limit(10)
-
-  // Personas para el resumen
-  const { data: personasData } = await db
-    .from('personas')
-    .select('id, nombre, color')
-    .eq('activa', true)
-    .order('nombre')
-
-  // Presupuesto del mes por persona
-  const { data: presupuestoData } = await db
-    .from('presupuesto')
-    .select('monto_planificado, concepto_id, conceptos(persona_id)')
-    .eq('mes', MES_ACTUAL)
-    .eq('anio', ANIO_ACTUAL)
-
-  // Gastos reales por persona
   const gastosPorPersona: Record<string, number> = {}
   gastosData?.forEach(g => {
-    const pid = g.persona_id
-    gastosPorPersona[pid] = (gastosPorPersona[pid] ?? 0) + g.monto
+    gastosPorPersona[g.persona_id] = (gastosPorPersona[g.persona_id] ?? 0) + g.monto
   })
 
-  // Presupuesto por persona
   const presupuestoPorPersona: Record<string, number> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   presupuestoData?.forEach((p: any) => {
@@ -79,25 +87,12 @@ export default async function Dashboard() {
     if (pid) presupuestoPorPersona[pid] = (presupuestoPorPersona[pid] ?? 0) + p.monto_planificado
   })
 
-  // Ingresos y gastos anuales para el gráfico
-  const { data: ingresosAnuales } = await db
-    .from('ingresos')
-    .select('mes, monto')
-    .eq('anio', ANIO_ACTUAL)
-
   const ingMeses = Array(12).fill(0)
   ingresosAnuales?.forEach(r => { ingMeses[r.mes - 1] += r.monto })
 
   const gastMeses = Array(12).fill(0)
-  // Para el gráfico anual necesitamos gastos de todo el año
-  const { data: gastosAnuales } = await db
-    .from('gastos')
-    .select('fecha, monto')
-    .gte('fecha', `${ANIO_ACTUAL}-01-01`)
-    .lte('fecha', `${ANIO_ACTUAL}-12-31`)
-
   gastosAnuales?.forEach(g => {
-    const m = new Date(g.fecha).getMonth()
+    const m = new Date(g.fecha + 'T12:00:00').getMonth()
     gastMeses[m] += g.monto
   })
 
@@ -105,6 +100,11 @@ export default async function Dashboard() {
   const pct = ingMes > 0 ? (balance / ingMes) * 100 : 0
   const semaforo = semaforoColor(pct)
   const sinDatos = ingMes === 0 && gastMes === 0
+
+  const deltaIng = deltaLabel(ingMes, ingAnt)
+  const deltaGast = deltaLabel(gastMes, gastAnt)
+
+  const hoy = new Date()
 
   return (
     <div className="space-y-6">
@@ -135,8 +135,21 @@ export default async function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-            <Card label="Ingresos del mes" value={formatGsCompleto(ingMes)} color="text-emerald-600" icon={<ArrowDownCircle size={18} className="text-emerald-500"/>} />
-            <Card label="Gastos del mes"   value={formatGsCompleto(gastMes)} color="text-red-500" icon={<ArrowUpCircle size={18} className="text-red-400"/>} />
+            <Card
+              label="Ingresos del mes"
+              value={formatGsCompleto(ingMes)}
+              color="text-emerald-600"
+              icon={<ArrowDownCircle size={18} className="text-emerald-500"/>}
+              delta={deltaIng ? { label: `${deltaIng.pct} vs ${MESES[MES_ANT - 1]}`, sube: deltaIng.sube } : undefined}
+            />
+            <Card
+              label="Gastos del mes"
+              value={formatGsCompleto(gastMes)}
+              color="text-red-500"
+              icon={<ArrowUpCircle size={18} className="text-red-400"/>}
+              delta={deltaGast ? { label: `${deltaGast.pct} vs ${MESES[MES_ANT - 1]}`, sube: deltaGast.sube } : undefined}
+              deltaInvert
+            />
             <Card
               label="Balance / Ahorro"
               value={formatGsCompleto(balance)}
@@ -170,7 +183,6 @@ export default async function Dashboard() {
         </>
       )}
 
-      {/* Gastos por persona */}
       {personasData && personasData.length > 0 && !sinDatos && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <h3 className="font-semibold text-gray-700 mb-4">Gastos por persona — {MESES[mesIdx]}</h3>
@@ -205,7 +217,6 @@ export default async function Dashboard() {
         </div>
       )}
 
-      {/* Próximos vencimientos */}
       {vencimientos && vencimientos.length > 0 && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-orange-100">
           <div className="flex items-center gap-2 mb-4">
@@ -244,7 +255,6 @@ export default async function Dashboard() {
         </div>
       )}
 
-      {/* Gráfico anual */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-700 mb-4">Ingresos vs Gastos — {ANIO_ACTUAL}</h3>
         <BarChart
@@ -258,9 +268,16 @@ export default async function Dashboard() {
   )
 }
 
-function Card({ label, value, color, sub, icon }: {
-  label: string; value: string; color: string; sub?: string; icon?: React.ReactNode
+function Card({ label, value, color, sub, icon, delta, deltaInvert }: {
+  label: string
+  value: string
+  color: string
+  sub?: string
+  icon?: React.ReactNode
+  delta?: { label: string; sube: boolean }
+  deltaInvert?: boolean
 }) {
+  const deltaPositivo = delta ? (deltaInvert ? !delta.sube : delta.sube) : false
   return (
     <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-2">
@@ -268,6 +285,11 @@ function Card({ label, value, color, sub, icon }: {
         {icon}
       </div>
       <p className={`text-xl md:text-2xl font-bold ${color} leading-tight`}>{value}</p>
+      {delta && (
+        <p className={`text-xs mt-1 font-medium ${deltaPositivo ? 'text-emerald-600' : 'text-red-500'}`}>
+          {delta.sube ? '▲' : '▼'} {delta.label}
+        </p>
+      )}
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   )

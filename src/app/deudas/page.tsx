@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { TrendingDown, Plus, X, Loader2, CheckCircle, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { TrendingDown, Plus, X, Loader2, CheckCircle, Trash2, Pencil, FileText } from 'lucide-react'
 import { formatGsCompleto } from '@/lib/supabase'
 
 const PERSONAS = ['Augusto', 'Miska', 'Niños', 'Casa', 'Familia']
@@ -18,8 +18,10 @@ type DeudaDB = {
   cuota_mensual?: number
   cuotas_totales?: number
   cuotas_pagadas?: number
+  fecha_vencimiento?: string
   activa: boolean
   personas?: { nombre: string; color: string }
+  fuente?: 'deuda' | 'gasto'
 }
 
 function calcularEstrategia(deudas: DeudaDB[], extraMes: number, tipo: 'avalancha' | 'bola') {
@@ -53,6 +55,17 @@ export default function DeudasPage() {
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
   const [extra, setExtra] = useState('500000')
+
+  const [editando, setEditando] = useState<DeudaDB | null>(null)
+  const [editSaldo, setEditSaldo] = useState('')
+  const [editCuotasPagadas, setEditCuotasPagadas] = useState('')
+  const [guardandoEdit, setGuardandoEdit] = useState(false)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
+  const [parseandoPDF, setParseandoPDF] = useState(false)
+  const [pdfParseado, setPdfParseado] = useState<{
+    cuotas_pagadas: number; saldo_actual: number; tasa_anual: number;
+    proxima_cuota?: { numero: number; vencimiento: string; monto: number }
+  } | null>(null)
 
   const [nombre, setNombre] = useState('')
   const [tipo, setTipo] = useState<'prestamo' | 'tarjeta' | 'otra'>('prestamo')
@@ -106,6 +119,67 @@ export default function DeudasPage() {
       setTimeout(() => setGuardado(false), 2000)
     }
     setGuardando(false)
+  }
+
+  function abrirEdicion(d: DeudaDB) {
+    setEditando(d)
+    setEditSaldo(String(d.saldo_actual))
+    setEditCuotasPagadas(d.cuotas_pagadas != null ? String(d.cuotas_pagadas) : '')
+    setPdfParseado(null)
+  }
+
+  async function subirPlanPagos(file: File) {
+    setParseandoPDF(true)
+    setPdfParseado(null)
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/deudas/importar-plan', { method: 'POST', body: form })
+    const data = await res.json()
+    if (res.ok) {
+      setPdfParseado(data)
+      setEditSaldo(String(data.saldo_actual))
+      setEditCuotasPagadas(String(data.cuotas_pagadas))
+    }
+    setParseandoPDF(false)
+  }
+
+  async function guardarEdicion() {
+    if (!editando) return
+    setGuardandoEdit(true)
+    const saldo = parseInt(editSaldo.replace(/\D/g, ''))
+    const pagadas = editCuotasPagadas ? parseInt(editCuotasPagadas) : null
+
+    if (editando.fuente === 'gasto') {
+      // Promover a deuda explícita con el saldo real del banco
+      await fetch('/api/deudas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: editando.nombre,
+          tipo: editando.tipo,
+          persona_id: editando.persona_id,
+          saldo_actual: saldo,
+          cuota_mensual: editando.cuota_mensual,
+          cuotas_totales: editando.cuotas_totales,
+          cuotas_pagadas: pagadas,
+          fecha_vencimiento: editando.fecha_vencimiento,
+          _skip_persona_lookup: true,
+        }),
+      })
+    } else {
+      await fetch(`/api/deudas/${editando.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          saldo_actual: saldo,
+          cuotas_pagadas: pagadas,
+          ...(pdfParseado?.tasa_anual ? { tasa_anual: pdfParseado.tasa_anual } : {}),
+        }),
+      })
+    }
+    setGuardandoEdit(false)
+    setEditando(null)
+    await cargarDeudas()
   }
 
   async function actualizarCuota(id: string, pagadas: number) {
@@ -275,23 +349,41 @@ export default function DeudasPage() {
                 <div key={d.id} className="px-5 py-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-semibold" style={{ color }}>{d.nombre}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold" style={{ color }}>{d.nombre}</p>
+                        {d.fuente === 'gasto' && (
+                          <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">desde gastos</span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400">
-                        {d.personas?.nombre ?? '—'} · {TIPO_LABEL[d.tipo]}
+                        {d.personas?.nombre ?? '—'} · {TIPO_LABEL[d.tipo] ?? '—'}
                         {d.tasa_anual ? ` · ${d.tasa_anual}% anual` : ''}
                         {d.cuota_mensual ? ` · cuota ${formatGsCompleto(d.cuota_mensual)}/mes` : ''}
                       </p>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="text-right">
-                        <p className="font-bold text-gray-800">{formatGsCompleto(d.saldo_actual)}</p>
+                        {d.saldo_actual > 0
+                          ? <p className="font-bold text-gray-800">{formatGsCompleto(d.saldo_actual)}</p>
+                          : <p className="text-xs text-gray-400 italic">saldo N/D</p>
+                        }
                         {d.cuotas_totales && d.cuotas_pagadas != null && (
                           <p className="text-xs text-gray-400">{d.cuotas_pagadas}/{d.cuotas_totales} cuotas</p>
                         )}
+                        {d.fecha_vencimiento && (
+                          <p className="text-xs text-orange-400">vence {new Date(d.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-PY')}</p>
+                        )}
                       </div>
-                      <button onClick={() => archivar(d.id)} className="text-gray-300 hover:text-red-400 mt-0.5">
-                        <Trash2 size={14}/>
-                      </button>
+                      <div className="flex flex-col gap-1">
+                        <button onClick={() => abrirEdicion(d)} className="text-gray-300 hover:text-blue-400">
+                          <Pencil size={14}/>
+                        </button>
+                        {d.fuente === 'deuda' && (
+                          <button onClick={() => archivar(d.id)} className="text-gray-300 hover:text-red-400">
+                            <Trash2 size={14}/>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {pct !== null && (
@@ -318,6 +410,94 @@ export default function DeudasPage() {
           </div>
         )}
       </div>
+
+      {/* Modal edición rápida */}
+      {editando && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
+            <div className="px-5 pt-5 pb-2 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800">Actualizar deuda</h3>
+              <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20}/>
+              </button>
+            </div>
+            <p className="px-5 text-sm text-gray-500 mb-4">{editando.nombre}</p>
+            <div className="px-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Saldo actual según el banco (₲)
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={editSaldo}
+                  onChange={e => setEditSaldo(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+              {editando.cuotas_totales && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Cuotas pagadas (de {editando.cuotas_totales})
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={editando.cuotas_totales}
+                    value={editCuotasPagadas}
+                    onChange={e => setEditCuotasPagadas(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-xl font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                </div>
+              )}
+            </div>
+            {/* Upload plan de pagos PDF */}
+            <div className="px-5 pb-2">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) subirPlanPagos(f) }}
+              />
+              <button
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={parseandoPDF}
+                className="w-full border border-dashed border-blue-300 text-blue-600 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-50 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {parseandoPDF
+                  ? <><Loader2 size={15} className="animate-spin"/> Analizando PDF...</>
+                  : <><FileText size={15}/> Subir plan de pagos del banco (PDF)</>
+                }
+              </button>
+              {pdfParseado && (
+                <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs space-y-1">
+                  <p className="font-semibold text-emerald-700">Datos extraídos del PDF:</p>
+                  <p className="text-emerald-600">· Cuotas pagadas: <strong>{pdfParseado.cuotas_pagadas}</strong> de {editando?.cuotas_totales}</p>
+                  <p className="text-emerald-600">· Saldo capital restante: <strong>{formatGsCompleto(pdfParseado.saldo_actual)}</strong></p>
+                  {pdfParseado.tasa_anual && <p className="text-emerald-600">· Tasa anual: <strong>{pdfParseado.tasa_anual}%</strong></p>}
+                  {pdfParseado.proxima_cuota && (
+                    <p className="text-emerald-600">· Próxima cuota #{pdfParseado.proxima_cuota.numero}: {formatGsCompleto(pdfParseado.proxima_cuota.monto)} el {new Date(pdfParseado.proxima_cuota.vencimiento + 'T12:00:00').toLocaleDateString('es-PY')}</p>
+                  )}
+                  <p className="text-emerald-500 italic">Los campos de arriba se actualizaron automáticamente.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 pb-5">
+              <button
+                onClick={guardarEdicion}
+                disabled={guardandoEdit || !editSaldo}
+                className="w-full bg-[#2C3E50] text-white py-3 rounded-xl font-semibold hover:bg-[#34495E] disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {guardandoEdit ? <Loader2 size={16} className="animate-spin"/> : <CheckCircle size={16}/>}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Simulador */}
       {deudasConTasa.length > 0 && (
