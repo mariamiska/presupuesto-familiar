@@ -223,8 +223,10 @@ export default function TarjetasPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {tarjetasFiltradas.map(t => {
-            const gastosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id)
+            const gastosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id && g.categorias?.nombre !== 'Pago Tarjeta')
+            const pagosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id && g.categorias?.nombre === 'Pago Tarjeta')
             const montoMesActual = gastosConTarjeta.reduce((sum, g) => sum + g.monto, 0)
+            const montoMesPagos = pagosConTarjeta.reduce((sum, g) => sum + g.monto, 0)
 
             const disponible = (t.limite ?? 0) - (t.deuda_actual ?? 0)
 
@@ -279,15 +281,33 @@ export default function TarjetasPage() {
                   </div>
                 </div>
 
-                {/* Gastos del mes vinculados a esta tarjeta */}
+                {/* Movimientos del mes vinculados a esta tarjeta */}
                 <div className="bg-slate-950/60 rounded-xl p-3.5 border border-slate-800 space-y-2">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-300 font-medium">Cargos de este mes:</span>
-                    <span className="font-bold text-emerald-400 text-sm">{formatGsCompleto(montoMesActual)}</span>
+                    <span className="text-slate-300 font-medium">Cargos del mes:</span>
+                    <span className="font-bold text-amber-400 text-sm">{formatGsCompleto(montoMesActual)}</span>
                   </div>
+                  {montoMesPagos > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-300 font-medium">Pagos del mes:</span>
+                      <span className="font-bold text-emerald-400 text-sm">−{formatGsCompleto(montoMesPagos)}</span>
+                    </div>
+                  )}
 
-                  {gastosConTarjeta.length > 0 ? (
+                  {(gastosConTarjeta.length > 0 || pagosConTarjeta.length > 0) ? (
                     <div className="space-y-1 pt-1.5 border-t border-slate-800/80 max-h-40 overflow-y-auto">
+                      {pagosConTarjeta.map(g => (
+                        <div key={g.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[11px] shrink-0">💳</span>
+                            <span className="text-[11px] text-emerald-300 truncate">{g.descripcion || 'Pago tarjeta'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] text-slate-400">{new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit' })}</span>
+                            <span className="text-[11px] font-semibold text-emerald-400">−{formatGsCompleto(g.monto)}</span>
+                          </div>
+                        </div>
+                      ))}
                       {gastosConTarjeta.map(g => {
                         const esSub = g.tipo_recurrencia === 'suscripcion' || g.tipo_recurrencia === 'fijo'
                         return (
@@ -296,7 +316,7 @@ export default function TarjetasPage() {
                               {g.categorias ? (
                                 <span className="text-[11px] shrink-0">{g.categorias.icono}</span>
                               ) : (
-                                <span className="text-[11px] shrink-0">💳</span>
+                                <span className="text-[11px] shrink-0">🛒</span>
                               )}
                               <span className="text-[11px] text-slate-200 truncate">{g.descripcion || '—'}</span>
                               {esSub && (
@@ -314,7 +334,7 @@ export default function TarjetasPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-slate-500 italic">Sin gastos vinculados este mes</p>
+                    <p className="text-[11px] text-slate-500 italic">Sin movimientos este mes</p>
                   )}
                 </div>
               </div>
