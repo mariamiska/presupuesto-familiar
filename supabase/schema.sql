@@ -128,3 +128,8 @@ create policy "familia_escribe" on deudas      for all using (auth.role() = 'aut
 create policy "familia_escribe" on ingresos    for all using (auth.role() = 'authenticated');
 create policy "familia_escribe" on conceptos   for all using (auth.role() = 'authenticated');
 create policy "familia_escribe" on presupuesto for all using (auth.role() = 'authenticated');
+
+-- Migración: tipo de recurrencia en gastos
+-- Ejecutar en Supabase Dashboard → SQL Editor
+alter table gastos add column if not exists tipo_recurrencia text check (tipo_recurrencia in ('suscripcion', 'fijo'));
+create index if not exists idx_gastos_tipo_recurrencia on gastos(tipo_recurrencia) where tipo_recurrencia is not null;

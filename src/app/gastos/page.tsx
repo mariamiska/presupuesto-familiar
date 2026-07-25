@@ -1,12 +1,14 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search } from 'lucide-react'
+import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search, Repeat2 } from 'lucide-react'
 import { MESES, formatGsCompleto } from '@/lib/supabase'
 
 type Persona = { id: string; nombre: string; color: string }
 type Concepto = { id: string; nombre: string; persona_id: string }
 
 const FUENTE_LABEL: Record<string, string> = { manual: '✏️', ocr: '📷', whatsapp: '💬', email: '📧' }
+
+type TipoRecurrencia = 'suscripcion' | 'fijo' | null
 
 type Gasto = {
   id: string
@@ -17,8 +19,14 @@ type Gasto = {
   cuota_actual?: number
   cuotas_total?: number
   fecha_vencimiento?: string
+  tipo_recurrencia?: TipoRecurrencia
   personas?: { nombre: string; color: string }
   conceptos?: { nombre: string }
+}
+
+const RECURRENCIA_BADGE: Record<string, { label: string; cls: string }> = {
+  suscripcion: { label: '🔄 Suscripción', cls: 'bg-purple-50 text-purple-600 border-purple-100' },
+  fijo:        { label: '📌 Fijo',         cls: 'bg-amber-50  text-amber-600  border-amber-100'  },
 }
 
 const mesActual = new Date().getMonth() + 1
@@ -35,6 +43,7 @@ export default function GastosPage() {
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
+  const [tipoRecurrencia, setTipoRecurrencia] = useState<TipoRecurrencia>(null)
 
   const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
   const [gastos, setGastos] = useState<Gasto[]>([])
@@ -51,6 +60,7 @@ export default function GastosPage() {
   const [editCuotaActual, setEditCuotaActual] = useState('')
   const [editCuotasTotal, setEditCuotasTotal] = useState('')
   const [editFechaVenc, setEditFechaVenc] = useState('')
+  const [editTipoRecurrencia, setEditTipoRecurrencia] = useState<TipoRecurrencia>(null)
   const [guardandoEdit, setGuardandoEdit] = useState(false)
   const [eliminando, setEliminando] = useState(false)
 
@@ -101,12 +111,12 @@ export default function GastosPage() {
     const res = await fetch('/api/gastos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fecha, persona_nombre: persona, concepto_nombre: concepto, monto: montoNum, nota, fuente: 'manual' }),
+      body: JSON.stringify({ fecha, persona_nombre: persona, concepto_nombre: concepto, monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia }),
     })
     setGuardando(false)
     if (res.ok) {
       setGuardado(true)
-      setTimeout(() => { setGuardado(false); setShowForm(false); setMonto(''); setNota(''); setPersona(''); setConcepto('') }, 1500)
+      setTimeout(() => { setGuardado(false); setShowForm(false); setMonto(''); setNota(''); setPersona(''); setConcepto(''); setTipoRecurrencia(null) }, 1500)
       cargarGastos()
     }
   }
@@ -121,6 +131,7 @@ export default function GastosPage() {
     setEditCuotaActual(g.cuota_actual ? String(g.cuota_actual) : '')
     setEditCuotasTotal(g.cuotas_total ? String(g.cuotas_total) : '')
     setEditFechaVenc(g.fecha_vencimiento ?? '')
+    setEditTipoRecurrencia(g.tipo_recurrencia ?? null)
   }
 
   async function guardarEdicion() {
@@ -158,6 +169,7 @@ export default function GastosPage() {
         cuota_actual: editCuotaActual ? parseInt(editCuotaActual) : null,
         cuotas_total: editCuotasTotal ? parseInt(editCuotasTotal) : null,
         fecha_vencimiento: editFechaVenc || null,
+        tipo_recurrencia: editTipoRecurrencia,
       }),
     })
 
@@ -260,15 +272,17 @@ export default function GastosPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                <select
+                <input
+                  list="conceptos-list"
                   value={concepto}
                   onChange={e => setConcepto(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+                  placeholder={persona ? 'Seleccioná o escribí nueva' : 'Primero elegí persona'}
                   disabled={!persona}
-                >
-                  <option value="">Seleccioná</option>
-                  {conceptos.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                </select>
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+                />
+                <datalist id="conceptos-list">
+                  {conceptos.map(c => <option key={c.id} value={c.nombre}/>)}
+                </datalist>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -290,6 +304,27 @@ export default function GastosPage() {
                   placeholder="Descripción breve"
                   className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de gasto</label>
+              <div className="flex gap-2">
+                {([null, 'suscripcion', 'fijo'] as TipoRecurrencia[]).map(t => (
+                  <button
+                    key={String(t)}
+                    type="button"
+                    onClick={() => setTipoRecurrencia(t)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                      tipoRecurrencia === t
+                        ? t === 'suscripcion' ? 'bg-purple-600 text-white border-purple-600'
+                          : t === 'fijo' ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-gray-700 text-white border-gray-700'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    {t === null ? 'Normal' : t === 'suscripcion' ? '🔄 Suscripción' : '📌 Fijo mensual'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -351,27 +386,42 @@ export default function GastosPage() {
             </div>
           </div>
 
-          {/* Búsqueda y filtro por persona */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-              <input
-                type="text"
-                value={busqueda}
-                onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar..."
-                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
-            </div>
-            <select
-              value={filtroPersona}
-              onChange={e => setFiltroPersona(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none min-w-0 max-w-[130px]"
-            >
-              <option value="">Todos</option>
-              {personas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
-            </select>
+          {/* Búsqueda */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input
+              type="text"
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por categoría, nota o persona..."
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
           </div>
+          {/* Filtro por persona — chips */}
+          {personas.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setFiltroPersona('')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  !filtroPersona ? 'bg-[#2C3E50] text-white border-[#2C3E50]' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                Todos
+              </button>
+              {personas.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setFiltroPersona(filtroPersona === p.nombre ? '' : p.nombre)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    filtroPersona === p.nombre ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                  style={filtroPersona === p.nombre ? { backgroundColor: p.color, borderColor: p.color } : {}}
+                >
+                  {p.nombre}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {cargando ? (
@@ -391,8 +441,13 @@ export default function GastosPage() {
                 onClick={() => abrirEdicion(g)}
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-800">{g.conceptos?.nombre ?? '—'}</span>
+                    {g.tipo_recurrencia && RECURRENCIA_BADGE[g.tipo_recurrencia] && (
+                      <span className={`text-xs border px-1.5 py-0.5 rounded font-medium ${RECURRENCIA_BADGE[g.tipo_recurrencia].cls}`}>
+                        {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
+                      </span>
+                    )}
                     {g.cuota_actual && g.cuotas_total && (
                       <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-medium">
                         cuota {g.cuota_actual}/{g.cuotas_total}
@@ -448,12 +503,17 @@ export default function GastosPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
-                    <select value={editConcepto} onChange={e => setEditConcepto(e.target.value)}
+                    <input
+                      list="conceptos-edit-list"
+                      value={editConcepto}
+                      onChange={e => setEditConcepto(e.target.value)}
+                      placeholder="Seleccioná o escribí"
+                      disabled={!editPersona}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
-                      disabled={!editPersona}>
-                      <option value="">Seleccioná</option>
-                      {conceptosEdit.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
-                    </select>
+                    />
+                    <datalist id="conceptos-edit-list">
+                      {conceptosEdit.map(c => <option key={c.id} value={c.nombre}/>)}
+                    </datalist>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -467,6 +527,29 @@ export default function GastosPage() {
                     <input type="text" value={editNota} onChange={e => setEditNota(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
+                </div>
+              </div>
+
+              {/* Tipo de recurrencia */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-1"><Repeat2 size={12}/> Tipo de gasto</label>
+                <div className="flex gap-1.5">
+                  {([null, 'suscripcion', 'fijo'] as TipoRecurrencia[]).map(t => (
+                    <button
+                      key={String(t)}
+                      type="button"
+                      onClick={() => setEditTipoRecurrencia(t)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                        editTipoRecurrencia === t
+                          ? t === 'suscripcion' ? 'bg-purple-600 text-white border-purple-600'
+                            : t === 'fijo' ? 'bg-amber-500 text-white border-amber-500'
+                            : 'bg-gray-700 text-white border-gray-700'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      {t === null ? 'Normal' : t === 'suscripcion' ? '🔄 Suscripción' : '📌 Fijo'}
+                    </button>
+                  ))}
                 </div>
               </div>
 

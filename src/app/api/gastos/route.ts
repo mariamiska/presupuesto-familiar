@@ -7,12 +7,16 @@ export async function GET(req: NextRequest) {
   const anio = searchParams.get('anio') ?? new Date().getFullYear().toString()
 
   const db = supabaseAdmin()
+  const recurrentes = searchParams.get('recurrentes')
+
   let query = db
     .from('gastos')
     .select('*, personas(nombre, color), conceptos(nombre)')
     .order('fecha', { ascending: false })
 
-  if (mes) {
+  if (recurrentes === '1') {
+    query = query.not('tipo_recurrencia', 'is', null)
+  } else if (mes) {
     const m = parseInt(mes)
     const a = parseInt(anio)
     const inicio = `${a}-${String(m).padStart(2,'0')}-01`
@@ -20,7 +24,7 @@ export async function GET(req: NextRequest) {
     query = query.gte('fecha', inicio).lte('fecha', fin)
   }
 
-  const { data, error } = await query.limit(100)
+  const { data, error } = await query.limit(500)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
@@ -60,6 +64,8 @@ export async function POST(req: NextRequest) {
 
     if (!concepto) return NextResponse.json({ error: 'No se pudo crear el concepto' }, { status: 500 })
 
+    const { tipo_recurrencia } = body
+
     const { data, error } = await db
       .from('gastos')
       .insert({
@@ -70,6 +76,7 @@ export async function POST(req: NextRequest) {
         nota: nota ?? '',
         fuente,
         pendiente_confirmacion: false,
+        tipo_recurrencia: tipo_recurrencia ?? null,
       })
       .select()
       .single()
