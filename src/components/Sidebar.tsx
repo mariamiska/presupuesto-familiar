@@ -9,10 +9,10 @@ import {
 const nav = [
   { href: '/',            label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/gastos',      label: 'Gastos',         icon: PlusCircle },
+  { href: '/facturas',    label: 'Factura',        icon: Upload },
   { href: '/simular',     label: 'Simular',        icon: Calculator },
   { href: '/deudas',      label: 'Deudas',         icon: TrendingDown },
   { href: '/reportes',    label: 'Reportes',       icon: BarChart2 },
-  { href: '/facturas',    label: 'Factura',        icon: Upload },
   { href: '/importar',    label: 'Importar',       icon: FileText },
 ]
 
