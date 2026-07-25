@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { Camera, ImageIcon, CheckCircle, Loader2, AlertCircle, X } from 'lucide-react'
+import { Camera, ImageIcon, CheckCircle, Loader2, AlertCircle, X, Clipboard } from 'lucide-react'
 import { formatGsCompleto } from '@/lib/datos-demo'
 
 type Persona = { id: string; nombre: string; color: string }
@@ -75,8 +75,17 @@ export default function FacturasPage() {
   const [error, setError] = useState<string | null>(null)
   const [guardado, setGuardado] = useState(false)
   const [guardando, setGuardando] = useState(false)
+  const [clipboardSoportado, setClipboardSoportado] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setClipboardSoportado(
+      typeof navigator !== 'undefined' &&
+      !!navigator.clipboard &&
+      typeof (navigator.clipboard as Clipboard & { read?: unknown }).read === 'function'
+    )
+  }, [])
 
   const [monto, setMonto] = useState('')
   const [persona, setPersona] = useState('')
@@ -127,6 +136,25 @@ export default function FacturasPage() {
       setOcrHecho(true)
     } finally {
       setCargando(false)
+    }
+  }
+
+  async function pegarDesdePortapapeles() {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = await (navigator.clipboard as any).read()
+      for (const item of items) {
+        const tipoImagen = item.types.find((t: string) => t.startsWith('image/'))
+        if (tipoImagen) {
+          const blob = await item.getType(tipoImagen)
+          const file = new File([blob], 'portapapeles.png', { type: tipoImagen })
+          handleFile(file)
+          return
+        }
+      }
+      setError('No hay imagen en el portapapeles. Copiá una captura de pantalla primero.')
+    } catch {
+      setError('No se pudo acceder al portapapeles. Verificá que el navegador tenga permiso.')
     }
   }
 
@@ -205,13 +233,23 @@ export default function FacturasPage() {
           >
             <Camera size={22}/> Sacar foto del comprobante
           </button>
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-3 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-          >
-            <ImageIcon size={18}/> Elegir de la galería
-          </button>
-          <p className="text-center text-xs text-gray-400">JPG, PNG · máx 10MB</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            >
+              <ImageIcon size={18}/> Galería
+            </button>
+            <button
+              onClick={pegarDesdePortapapeles}
+              disabled={!clipboardSoportado}
+              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={clipboardSoportado ? 'Pegar imagen del portapapeles' : 'Tu navegador no soporta pegar imágenes'}
+            >
+              <Clipboard size={18}/> Pegar
+            </button>
+          </div>
+          <p className="text-center text-xs text-gray-400">JPG, PNG · máx 10MB · o pegá una captura</p>
         </div>
       ) : (
         <div className="space-y-4">
