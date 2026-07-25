@@ -4,10 +4,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const PERSONAS_CONOCIDAS = ['Augusto', 'Miska', 'Niños', 'Casa', 'Familia']
 
-// Parsea mensajes como:
-//   "gasté 50k supermercado miska"
-//   "gasto 150000 alquiler casa"
-//   "50k nafta augusto"
 function parsearMensaje(texto: string): { monto: number; concepto: string; persona: string } | null {
   const t = texto.toLowerCase().trim()
   const sinPrefijo = t.replace(/^(gast[eéo]|gasto|compré|compre)\s+/i, '')
@@ -36,8 +32,9 @@ async function analizarImagenConGemini(
 ): Promise<{ monto: number; concepto: string; persona: string; fecha: string } | null> {
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
+    // Mismo prompt que /api/ocr
     const prompt = `Sos un asistente de finanzas personales para una familia paraguaya. Analizá este comprobante (ticket, factura o transferencia bancaria) y extraé los datos en JSON.
 
 Personas posibles: ${PERSONAS_CONOCIDAS.join(', ')}.
@@ -48,9 +45,12 @@ Si no podés determinar → persona = "".
 Respondé SOLO con JSON válido, sin texto adicional:
 {
   "monto": número en guaraníes (sin puntos ni comas),
-  "concepto": "nombre del proveedor o descripción del gasto",
-  "fecha": "YYYY-MM-DD o vacío si no aparece",
-  "persona": "Augusto" | "Miska" | "Niños" | "Casa" | "Familia" | ""
+  "proveedor": "nombre del proveedor o beneficiario",
+  "fecha": "YYYY-MM-DD",
+  "tipo": "transferencia" | "compra" | "pago_servicio" | "otro",
+  "persona_sugerida": "Augusto" | "Miska" | "Niños" | "Casa" | "Familia" | "",
+  "concepto_sugerido": "categoría sugerida en español",
+  "referencia": "número de operación o referencia si existe"
 }`
 
     const result = await model.generateContent([
@@ -67,8 +67,8 @@ Respondé SOLO con JSON válido, sin texto adicional:
 
     return {
       monto: Math.round(data.monto),
-      concepto: data.concepto || 'Comprobante',
-      persona: data.persona || '',
+      concepto: data.concepto_sugerido || data.proveedor || 'Comprobante',
+      persona: data.persona_sugerida || '',
       fecha: data.fecha || new Date().toISOString().split('T')[0],
     }
   } catch {
@@ -76,17 +76,18 @@ Respondé SOLO con JSON válido, sin texto adicional:
   }
 }
 
-async function descargarImagenDeEvolution(mediaKey: string, instanceName: string): Promise<{ base64: string; mimeType: string } | null> {
+// Evolution API v2: descarga la imagen pasando el objeto message completo
+async function descargarImagen(messageObj: object): Promise<{ base64: string; mimeType: string } | null> {
   try {
     const res = await fetch(
-      `${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${instanceName}`,
+      `${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/presupuesto-familiar`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           apikey: process.env.EVOLUTION_API_KEY!,
         },
-        body: JSON.stringify({ message: { key: { id: mediaKey } }, convertToMp4: false }),
+        body: JSON.stringify({ message: messageObj, convertToMp4: false }),
       }
     )
     const data = await res.json()
@@ -167,7 +168,9 @@ async function guardarGasto(params: {
     return false
   }
 
-  const montoFormateado = params.monto >= 1000
+  const montoFormateado = params.monto >= 1_000_000
+    ? `₲ ${(params.monto / 1_000_000).toFixed(1)}M`
+    : params.monto >= 1000
     ? `₲ ${(params.monto / 1000).toFixed(0)}K`
     : `₲ ${params.monto}`
 
@@ -182,21 +185,27 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
+    // Evolution API v2: el evento llega como body.event y el mensaje como body.data
     if (body.event !== 'messages.upsert') return NextResponse.json({ ok: true })
 
-    const msg = body.data?.messages?.[0]
-    if (!msg || msg.key?.fromMe) return NextResponse.json({ ok: true })
+    const msg = body.data
+    if (!msg) return NextResponse.json({ ok: true })
+
+    // Ignorar mensajes propios y mensajes de grupos
+    if (msg.key?.fromMe) return NextResponse.json({ ok: true })
+    if (msg.key?.remoteJid?.endsWith('@g.us')) return NextResponse.json({ ok: true })
 
     const numero = msg.key?.remoteJid?.replace('@s.whatsapp.net', '')
+    if (!numero) return NextResponse.json({ ok: true })
+
     const hoy = new Date().toISOString().split('T')[0]
 
     // --- Imagen / comprobante ---
-    const esImagen = msg.message?.imageMessage || msg.message?.documentMessage
-    if (esImagen) {
+    const imagenMsg = msg.message?.imageMessage || msg.message?.documentMessage
+    if (imagenMsg) {
       await enviarRespuesta(numero, '📸 Analizando el comprobante con Gemini...')
 
-      const mediaId = msg.key?.id
-      const imagen = await descargarImagenDeEvolution(mediaId, 'presupuesto-familiar')
+      const imagen = await descargarImagen(msg)
 
       if (!imagen) {
         await enviarRespuesta(numero, 'No pude descargar la imagen. Intentá de nuevo.')
@@ -206,15 +215,17 @@ export async function POST(req: NextRequest) {
       const ocr = await analizarImagenConGemini(imagen.base64, imagen.mimeType)
 
       if (!ocr) {
-        await enviarRespuesta(numero, 'No pude leer el comprobante. ¿Podés escribir el monto manualmente?\nEjemplo: _50k supermercado miska_')
+        await enviarRespuesta(
+          numero,
+          'No pude leer el comprobante. ¿Podés escribir el monto manualmente?\nEjemplo: _50k supermercado miska_'
+        )
         return NextResponse.json({ ok: true })
       }
 
-      // Si Gemini no identificó la persona, pedirla
       if (!ocr.persona) {
         await enviarRespuesta(
           numero,
-          `📋 Comprobante leído:\n*₲ ${(ocr.monto / 1000).toFixed(0)}K* — ${ocr.concepto}\nFecha: ${ocr.fecha}\n\n¿A quién cargo este gasto? Respondé con el nombre:\n${PERSONAS_CONOCIDAS.join(' | ')}`
+          `📋 Comprobante leído:\n*₲ ${(ocr.monto / 1000).toFixed(0)}K* — ${ocr.concepto}\nFecha: ${ocr.fecha}\n\n¿A quién cargo este gasto?\n${PERSONAS_CONOCIDAS.join(' | ')}`
         )
         return NextResponse.json({ ok: true })
       }
@@ -223,8 +234,8 @@ export async function POST(req: NextRequest) {
         monto: ocr.monto,
         concepto: ocr.concepto,
         personaNombre: ocr.persona,
-        fecha: ocr.fecha,
-        nota: `Comprobante vía WhatsApp`,
+        fecha: ocr.fecha || hoy,
+        nota: 'Comprobante vía WhatsApp',
         numero,
       })
 
@@ -236,11 +247,10 @@ export async function POST(req: NextRequest) {
     if (!texto) return NextResponse.json({ ok: true })
 
     const parsed = parsearMensaje(texto)
-
     if (!parsed) {
       await enviarRespuesta(
         numero,
-        `No entendí ese formato. Probá con:\n_50k supermercado miska_\n_gasto 150000 alquiler casa_\n\nO mandá una foto del comprobante 📸`
+        `No entendí ese formato 🤔\n\nProbá con:\n_50k supermercado miska_\n_gasto 150000 alquiler casa_\n\nO mandá una foto del comprobante 📸`
       )
       return NextResponse.json({ ok: true })
     }
