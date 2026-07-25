@@ -205,7 +205,7 @@ export default function FacturasPage() {
         onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
 
       {!imagen ? (
-        <div className="space-y-3" onDrop={e => { e.preventDefault(); e.dataTransfer.files[0] && handleFile(e.dataTransfer.files[0]) }} onDragOver={e => e.preventDefault()}>
+        <div className="space-y-3" onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]) }} onDragOver={e => e.preventDefault()}>
           <button onClick={() => cameraRef.current?.click()}
             className="w-full flex items-center justify-center gap-3 bg-[#2C3E50] text-white py-5 rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform shadow-md">
             <Camera size={22}/> Sacar foto del comprobante
