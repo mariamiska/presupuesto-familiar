@@ -10,26 +10,73 @@ const CONCEPTOS = [
   'Transporte','Ropa','Hogar','Tecnología','Servicios','Transferencia','Otro'
 ]
 
-type OcrResult = {
-  monto: number
-  proveedor: string
-  fecha: string
-  tipo: string
-  persona_sugerida: string
-  concepto_sugerido: string
-  referencia?: string
+function parsearTextoOcr(texto: string) {
+  const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean)
+  const todo = texto.toLowerCase()
+
+  // Monto: buscar número grande (guaraníes suelen ser 5+ dígitos)
+  let monto = ''
+  // Patrones comunes en comprobantes paraguayos
+  const patronesMonto = [
+    /(?:monto|importe|total|gs\.?|₲)\s*[:\.]?\s*([\d.,]+)/i,
+    /(?:transferencia exitosa|transferido)\s*[\w\s]*\s*([\d.,]+)/i,
+    /\b([\d]{1,3}(?:[.,][\d]{3})+)\b/, // número con separadores tipo 1.234.567
+  ]
+  for (const p of patronesMonto) {
+    const m = texto.match(p)
+    if (m) {
+      monto = m[1].replace(/\./g, '').replace(/,/g, '')
+      if (monto.length >= 4) break
+    }
+  }
+
+  // Fecha: buscar DD/MM/YYYY o YYYY-MM-DD
+  let fecha = ''
+  const mFecha = texto.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/) ||
+                 texto.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/)
+  if (mFecha) {
+    const f = mFecha[0]
+    if (f.match(/^\d{4}/)) {
+      fecha = f.replace(/\//g, '-')
+    } else {
+      const [, d, m, y] = f.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/) || []
+      if (d && m && y) fecha = `${y}-${m}-${d}`
+    }
+  }
+  if (!fecha) fecha = new Date().toISOString().split('T')[0]
+
+  // Proveedor / beneficiario
+  let proveedor = ''
+  for (const linea of lineas) {
+    if (/beneficiario|destinatario|a favor de|proveedor/i.test(linea)) {
+      proveedor = linea.replace(/.*?:\s*/, '').trim()
+      break
+    }
+  }
+
+  // Concepto sugerido
+  let concepto = ''
+  if (/transfer|envio|env[ií]o/i.test(todo)) concepto = 'Transferencia'
+  else if (/farmac|medicam|salud|clinic|hospital|doctor/i.test(todo)) concepto = 'Salud'
+  else if (/superm|almac|aliment|comida|market/i.test(todo)) concepto = 'Alimentación'
+  else if (/combusti|nafta|gasolina|petro/i.test(todo)) concepto = 'Combustible'
+  else if (/colegio|escuela|educac|univers/i.test(todo)) concepto = 'Educación'
+  else if (/ande|copaco|essap|servicio|luz|agua|gas\b/i.test(todo)) concepto = 'Servicios'
+  else if (/taxi|uber|transport|bus\b/i.test(todo)) concepto = 'Transporte'
+  else concepto = ''
+
+  return { monto, fecha, proveedor, concepto }
 }
 
 export default function FacturasPage() {
   const [imagen, setImagen] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
-  const [ocr, setOcr] = useState<OcrResult | null>(null)
+  const [ocrHecho, setOcrHecho] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [guardado, setGuardado] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Form fields (prellenados por OCR, editables)
   const [monto, setMonto] = useState('')
   const [persona, setPersona] = useState('')
   const [concepto, setConcepto] = useState('')
@@ -38,27 +85,31 @@ export default function FacturasPage() {
 
   async function handleFile(file: File) {
     setImagen(file)
-    setOcr(null)
+    setOcrHecho(false)
     setError(null)
     setGuardado(false)
+    setMonto(''); setPersona(''); setConcepto(''); setFecha(''); setNota('')
     const url = URL.createObjectURL(file)
     setPreview(url)
-    // Arrancar OCR automáticamente
+
     setCargando(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/api/ocr', { method: 'POST', body: form })
-      if (!res.ok) throw new Error('Error procesando imagen')
-      const data: OcrResult = await res.json()
-      setOcr(data)
-      setMonto(String(data.monto))
-      setPersona(data.persona_sugerida || '')
-      setConcepto(data.concepto_sugerido || '')
-      setFecha(data.fecha || new Date().toISOString().split('T')[0])
-      setNota(data.proveedor || '')
+      const { createWorker } = await import('tesseract.js')
+      const worker = await createWorker('spa+eng')
+      const { data: { text } } = await worker.recognize(file)
+      await worker.terminate()
+
+      const parsed = parsearTextoOcr(text)
+      setMonto(parsed.monto)
+      setFecha(parsed.fecha)
+      setNota(parsed.proveedor)
+      setConcepto(parsed.concepto)
+      setOcrHecho(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al procesar la imagen')
+      // Si Tesseract falla, igual mostramos el formulario vacío
+      console.error('OCR error:', e)
+      setFecha(new Date().toISOString().split('T')[0])
+      setOcrHecho(true)
     } finally {
       setCargando(false)
     }
@@ -68,6 +119,12 @@ export default function FacturasPage() {
     e.preventDefault()
     const file = e.dataTransfer.files[0]
     if (file) handleFile(file)
+  }
+
+  function reset() {
+    setImagen(null); setPreview(null); setOcrHecho(false)
+    setGuardado(false); setMonto(''); setPersona(''); setConcepto('')
+    setFecha(''); setNota(''); setError(null)
   }
 
   async function guardarGasto() {
@@ -90,10 +147,9 @@ export default function FacturasPage() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h2 className="text-2xl font-bold text-gray-800">Subir comprobante</h2>
-        <p className="text-sm text-gray-500 mt-1">Ticket, factura o transferencia — Claude lo lee automáticamente</p>
+        <p className="text-sm text-gray-500 mt-1">Ticket, factura o transferencia — se lee automáticamente</p>
       </div>
 
-      {/* Zona de drop */}
       {!imagen ? (
         <div
           onDrop={onDrop}
@@ -104,17 +160,17 @@ export default function FacturasPage() {
           <Upload className="mx-auto mb-3 text-gray-300" size={40}/>
           <p className="font-medium text-gray-500">Arrastrá la foto o hacé click para subir</p>
           <p className="text-sm text-gray-400 mt-1">Ticket, factura, captura de transferencia, comprobante de pago</p>
-          <p className="text-xs text-gray-300 mt-2">JPG, PNG, PDF · máx 10MB</p>
+          <p className="text-xs text-gray-300 mt-2">JPG, PNG · máx 10MB</p>
           <input
             ref={inputRef}
             type="file"
-            accept="image/*,application/pdf"
+            accept="image/*"
             className="hidden"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
         </div>
       ) : (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <div className="flex gap-4 items-start">
             {preview && (
               <img src={preview} alt="Comprobante" className="w-32 h-40 object-contain rounded-lg border border-gray-100 bg-gray-50"/>
@@ -127,7 +183,7 @@ export default function FacturasPage() {
               {cargando && (
                 <div className="flex items-center gap-2 text-blue-600 text-sm">
                   <Loader2 className="animate-spin" size={16}/>
-                  Claude está leyendo el comprobante…
+                  Leyendo el comprobante…
                 </div>
               )}
               {error && (
@@ -136,16 +192,13 @@ export default function FacturasPage() {
                   {error}
                 </div>
               )}
-              {ocr && (
+              {ocrHecho && !cargando && (
                 <div className="flex items-center gap-2 text-emerald-600 text-sm">
                   <CheckCircle size={15}/>
-                  Datos extraídos · revisá y confirmá
+                  {monto ? 'Datos extraídos · revisá y completá lo que falta' : 'Completá los datos manualmente'}
                 </div>
               )}
-              <button
-                onClick={() => { setImagen(null); setPreview(null); setOcr(null); setGuardado(false) }}
-                className="text-xs text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600">
                 Cambiar imagen
               </button>
             </div>
@@ -153,11 +206,11 @@ export default function FacturasPage() {
         </div>
       )}
 
-      {/* Formulario de confirmación */}
-      {(ocr || imagen) && !guardado && (
+      {/* Formulario — visible apenas se sube la imagen, aunque OCR no terminó */}
+      {imagen && !guardado && (
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
           <h3 className="font-semibold text-gray-700">
-            {ocr ? 'Revisá y confirmá los datos' : 'Cargá los datos del comprobante'}
+            {ocrHecho && monto ? 'Revisá y confirmá los datos' : 'Completá los datos del comprobante'}
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -214,7 +267,7 @@ export default function FacturasPage() {
           </div>
           <button
             onClick={guardarGasto}
-            disabled={!monto || !persona}
+            disabled={!monto || !persona || cargando}
             className="w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Guardar gasto
@@ -229,10 +282,7 @@ export default function FacturasPage() {
           <p className="text-sm text-emerald-600 mt-1">
             {formatGsCompleto(parseInt(monto))} · {persona} · {concepto}
           </p>
-          <button
-            onClick={() => { setImagen(null); setPreview(null); setOcr(null); setGuardado(false); setMonto(''); setPersona(''); setConcepto(''); }}
-            className="mt-4 text-sm text-emerald-700 underline"
-          >
+          <button onClick={reset} className="mt-4 text-sm text-emerald-700 underline">
             Subir otro comprobante
           </button>
         </div>
