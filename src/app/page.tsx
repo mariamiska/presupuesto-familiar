@@ -29,11 +29,13 @@ export default async function Dashboard() {
   const fechaInicio = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-01`
   const fechaFin = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-31`
 
-  const { data: gastosData } = await db
+  const { data: gastosData, error: gastosError } = await db
     .from('gastos')
     .select('monto, persona_id, personas(nombre, color)')
     .gte('fecha', fechaInicio)
     .lte('fecha', fechaFin)
+
+  console.log('DEBUG gastos query:', { fechaInicio, fechaFin, count: gastosData?.length, error: gastosError?.message })
 
   const gastMes = gastosData?.reduce((s, r) => s + r.monto, 0) ?? 0
 
