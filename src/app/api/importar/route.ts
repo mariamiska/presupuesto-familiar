@@ -173,11 +173,22 @@ export async function POST(req: NextRequest) {
       db.from('gastos').delete().eq('fuente', 'datos'),
     ])
 
-    await Promise.all([
-      ingInserts.length ? db.from('ingresos').insert(ingInserts) : Promise.resolve(),
-      presInserts.length ? db.from('presupuesto').insert(presInserts) : Promise.resolve(),
-      gastInserts.length ? db.from('gastos').insert(gastInserts) : Promise.resolve(),
+    const [resIng, resPres, resGast] = await Promise.all([
+      ingInserts.length ? db.from('ingresos').insert(ingInserts) : Promise.resolve({ error: null }),
+      presInserts.length ? db.from('presupuesto').insert(presInserts) : Promise.resolve({ error: null }),
+      gastInserts.length ? db.from('gastos').insert(gastInserts) : Promise.resolve({ error: null }),
     ])
+
+    const errors = [
+      resIng?.error && `ingresos: ${resIng.error.message}`,
+      resPres?.error && `presupuesto: ${resPres.error.message}`,
+      resGast?.error && `gastos: ${resGast.error.message}`,
+    ].filter(Boolean)
+
+    if (errors.length) {
+      console.error('Import insert errors:', errors)
+      return NextResponse.json({ error: errors.join(' | ') }, { status: 500 })
+    }
 
     return NextResponse.json({
       ok: true,
