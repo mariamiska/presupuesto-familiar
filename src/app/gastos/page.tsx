@@ -461,7 +461,9 @@ export default function GastosPage() {
                     {g.categorias && (
                       <span className="text-sm" title={g.categorias.nombre}>{g.categorias.icono}</span>
                     )}
-                    <span className="font-medium text-gray-800">{g.descripcion ?? '—'}</span>
+                    <span className={`font-medium ${g.descripcion ? 'text-gray-800' : 'text-gray-400 italic'}`}>
+                      {g.descripcion || g.nota || '—'}
+                    </span>
                     {g.tipo_recurrencia && RECURRENCIA_BADGE[g.tipo_recurrencia] && (
                       <span className={`text-xs border px-1.5 py-0.5 rounded font-medium ${RECURRENCIA_BADGE[g.tipo_recurrencia].cls}`}>
                         {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
