@@ -1,14 +1,15 @@
-import { supabase, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
+import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 
 const ANIO = new Date().getFullYear()
 
 export default async function ReportesPage() {
-  const { data: ingresosData } = await supabase
+  const db = supabaseAdmin()
+  const { data: ingresosData } = await db
     .from('ingresos')
     .select('mes, monto')
     .eq('anio', ANIO)
 
-  const { data: gastosData } = await supabase
+  const { data: gastosData } = await db
     .from('gastos')
     .select('fecha, monto')
     .gte('fecha', `${ANIO}-01-01`)

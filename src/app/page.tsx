@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, Minus, AlertCircle } from 'lucide-react'
-import { supabase, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
+import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
 
 const MES_ACTUAL = new Date().getMonth() + 1
@@ -12,10 +12,11 @@ function semaforoColor(pct: number) {
 }
 
 export default async function Dashboard() {
+  const db = supabaseAdmin()
   const mesIdx = MES_ACTUAL - 1
 
   // Ingresos del mes actual
-  const { data: ingresosData } = await supabase
+  const { data: ingresosData } = await db
     .from('ingresos')
     .select('monto')
     .eq('mes', MES_ACTUAL)
@@ -27,7 +28,7 @@ export default async function Dashboard() {
   const fechaInicio = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-01`
   const fechaFin = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-31`
 
-  const { data: gastosData } = await supabase
+  const { data: gastosData } = await db
     .from('gastos')
     .select('monto, persona_id, personas(nombre, color)')
     .gte('fecha', fechaInicio)
@@ -36,14 +37,14 @@ export default async function Dashboard() {
   const gastMes = gastosData?.reduce((s, r) => s + r.monto, 0) ?? 0
 
   // Personas para el resumen
-  const { data: personasData } = await supabase
+  const { data: personasData } = await db
     .from('personas')
     .select('id, nombre, color')
     .eq('activa', true)
     .order('nombre')
 
   // Presupuesto del mes por persona
-  const { data: presupuestoData } = await supabase
+  const { data: presupuestoData } = await db
     .from('presupuesto')
     .select('monto_planificado, concepto_id, conceptos(persona_id)')
     .eq('mes', MES_ACTUAL)
@@ -65,7 +66,7 @@ export default async function Dashboard() {
   })
 
   // Ingresos y gastos anuales para el gráfico
-  const { data: ingresosAnuales } = await supabase
+  const { data: ingresosAnuales } = await db
     .from('ingresos')
     .select('mes, monto')
     .eq('anio', ANIO_ACTUAL)
@@ -75,7 +76,7 @@ export default async function Dashboard() {
 
   const gastMeses = Array(12).fill(0)
   // Para el gráfico anual necesitamos gastos de todo el año
-  const { data: gastosAnuales } = await supabase
+  const { data: gastosAnuales } = await db
     .from('gastos')
     .select('fecha, monto')
     .gte('fecha', `${ANIO_ACTUAL}-01-01`)

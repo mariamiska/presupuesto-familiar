@@ -1,11 +1,12 @@
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import SimularClient from './SimularClient'
 
 const MES_ACTUAL = new Date().getMonth() + 1
 const ANIO_ACTUAL = new Date().getFullYear()
 
 export default async function SimularPage() {
-  const { data: ingresosData } = await supabase
+  const db = supabaseAdmin()
+  const { data: ingresosData } = await db
     .from('ingresos')
     .select('monto')
     .eq('mes', MES_ACTUAL)
@@ -16,7 +17,7 @@ export default async function SimularPage() {
   const fechaInicio = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-01`
   const fechaFin = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-31`
 
-  const { data: gastosData } = await supabase
+  const { data: gastosData } = await db
     .from('gastos')
     .select('monto')
     .gte('fecha', fechaInicio)
