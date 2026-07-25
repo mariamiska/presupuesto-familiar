@@ -106,7 +106,7 @@ export default async function Dashboard() {
   type DeudaActiva = {
     id: string; nombre: string; cuota_mensual: number
     cuotas_totales?: number | null; cuotas_pagadas?: number | null
-    personas?: { nombre: string; color: string } | null
+    personas?: { nombre: string; color: string }[] | { nombre: string; color: string } | null
   }
   const cuotasDeudas = (deudasActivas ?? []) as DeudaActiva[]
   const totalCuotasDeuda = cuotasDeudas.reduce((s, d) => s + d.cuota_mensual, 0)
