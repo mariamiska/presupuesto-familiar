@@ -1,7 +1,8 @@
+/* eslint-disable @next/next/no-img-element */
 'use client'
 import { useState, useRef } from 'react'
 import { Upload, FileImage, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
-import { MESES, formatGsCompleto } from '@/lib/datos-demo'
+import { formatGsCompleto } from '@/lib/datos-demo'
 
 const PERSONAS = ['Augusto','Miska','Niños','Casa','Familia']
 const CONCEPTOS = [
@@ -109,7 +110,6 @@ export default function FacturasPage() {
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
           <div className="flex gap-4 items-start">
             {preview && (
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="Comprobante" className="w-32 h-40 object-contain rounded-lg border border-gray-100 bg-gray-50"/>
             )}
             <div className="flex-1 space-y-3">

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 
-const MESES_MAP: Record<string, number> = {
-  Enero:1, Febrero:2, Marzo:3, Abril:4, Mayo:5, Junio:6,
-  Julio:7, Agosto:8, Setiembre:9, Octubre:10, Noviembre:11, Diciembre:12
-}
 
 export async function POST(req: NextRequest) {
   try {
