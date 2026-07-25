@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 
 const ANIO = new Date().getFullYear()

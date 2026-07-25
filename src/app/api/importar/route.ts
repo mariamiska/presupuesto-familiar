@@ -77,8 +77,9 @@ export async function POST(req: NextRequest) {
 
     // 3. PRE-SCAN Datos y Gastos Reales para descubrir todos los conceptos nuevos
     type RawRow = Record<string, string|number>
-    const datosRows: RawRow[] = []
-    const realRows: RawRow[] = []
+    const datosRows: RawRow[] = []           // todos los de Datos (para presupuesto)
+    const datosGastRows: RawRow[] = []       // solo tipo=Gasto de Datos (para gastos reales)
+    const realRows: RawRow[] = []            // Gastos Reales (para gastos reales)
 
     const wsDatos = wb.Sheets['Datos']
     if (wsDatos) {
@@ -88,11 +89,13 @@ export async function POST(req: NextRequest) {
         const conceptoNombre = String(row['Concepto'] ?? '').trim()
         const personaNombre = String(row['Persona'] ?? '').trim()
         const monto = Number(row['Monto'] ?? 0)
+        const tipo = String(row['Tipo'] ?? '').trim().toLowerCase()
         if (!MESES_MAP[mesNombre] || !conceptoNombre || !monto) continue
         const personaId = getPersonaId(personaNombre)
         if (!personaId) continue
         datosRows.push(row)
         getOrQueueConcepto(conceptoNombre, personaId)
+        if (tipo === 'gasto') datosGastRows.push(row)
       }
     }
 
@@ -131,6 +134,23 @@ export async function POST(req: NextRequest) {
 
     // 6. Construir inserts de gastos reales
     const gastInserts: object[] = []
+
+    // Gastos fijos de la hoja Datos (tipo=Gasto)
+    for (const row of datosGastRows) {
+      const mes = MESES_MAP[String(row['Mes']).trim()]
+      const conceptoNombre = String(row['Concepto']).trim()
+      const personaNombre = String(row['Persona']).trim()
+      const personaId = getPersonaId(personaNombre)!
+      const monto = Number(row['Monto'])
+      const nota = String(row['Notas'] ?? '').trim()
+      const conceptoId = conceptoMap[`${personaId}:${conceptoNombre.toLowerCase().trim()}`]
+      if (conceptoId) {
+        const fecha = `${ANIO}-${String(mes).padStart(2,'0')}-15`
+        gastInserts.push({ fecha, concepto_id: conceptoId, persona_id: personaId, monto, nota, fuente: 'datos', pendiente_confirmacion: false })
+      }
+    }
+
+    // Gastos variables de la hoja Gastos Reales
     for (const row of realRows) {
       const mes = MESES_MAP[String(row['Mes']).trim()]
       const conceptoNombre = String(row['Concepto']).trim()
@@ -150,6 +170,7 @@ export async function POST(req: NextRequest) {
       db.from('ingresos').delete().eq('anio', ANIO),
       db.from('presupuesto').delete().eq('anio', ANIO),
       db.from('gastos').delete().eq('fuente', 'importar'),
+      db.from('gastos').delete().eq('fuente', 'datos'),
     ])
 
     await Promise.all([

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { TrendingUp, TrendingDown, Minus, AlertCircle } from 'lucide-react'
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
