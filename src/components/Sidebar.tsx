@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PlusCircle, Calculator, TrendingDown,
-  FileText, Upload, BarChart2, Settings
+  FileText, Upload, BarChart2
 } from 'lucide-react'
 
 const nav = [

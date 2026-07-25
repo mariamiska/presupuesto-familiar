@@ -78,8 +78,6 @@ export default function FacturasPage() {
     // TODO: guardar en Supabase
   }
 
-  const mesActual = MESES[new Date().getMonth()]
-
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -111,6 +109,7 @@ export default function FacturasPage() {
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-4">
           <div className="flex gap-4 items-start">
             {preview && (
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="Comprobante" className="w-32 h-40 object-contain rounded-lg border border-gray-100 bg-gray-50"/>
             )}
             <div className="flex-1 space-y-3">
