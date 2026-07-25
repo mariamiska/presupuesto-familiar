@@ -225,7 +225,7 @@ export default function TarjetasPage() {
           {tarjetasFiltradas.map(t => {
             const gastosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id)
             const montoMesActual = gastosConTarjeta.reduce((sum, g) => sum + g.monto, 0)
-            const suscripcionesConTarjeta = gastosConTarjeta.filter(g => g.tipo_recurrencia === 'suscripcion' || g.tipo_recurrencia === 'fijo')
+
             const disponible = (t.limite ?? 0) - (t.deuda_actual ?? 0)
 
             return (

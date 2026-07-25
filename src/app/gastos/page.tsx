@@ -269,7 +269,6 @@ export default function GastosPage() {
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
   const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
-  const editEsPagoTarjeta = editCategoriaSeleccionada?.nombre === 'Pago Tarjeta'
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-2xl">
