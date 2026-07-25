@@ -5,11 +5,18 @@ import { Camera, ImageIcon, CheckCircle, Loader2, AlertCircle, X, Clipboard } fr
 import { formatGsCompleto } from '@/lib/datos-demo'
 
 type Persona = { id: string; nombre: string; color: string }
-type Concepto = { id: string; nombre: string; persona_id: string }
+type Categoria = { id: string; nombre: string; icono: string; color: string }
 
-const CONCEPTOS_FALLBACK = [
-  'Alimentación','Combustible','Salud','Educación','Entretenimiento',
-  'Transporte','Ropa','Hogar','Tecnología','Servicios','Transferencia','Otro'
+const CATEGORIA_DESDE_TEXTO: Array<{ keywords: string[]; categoria: string }> = [
+  { keywords: ['transfer','envio','envío'], categoria: 'Deudas' },
+  { keywords: ['farmac','medicam','salud','clinic','hospital','doctor'], categoria: 'Salud' },
+  { keywords: ['superm','almac','aliment','comida','market'], categoria: 'Alimentación' },
+  { keywords: ['combusti','nafta','gasolina','petro'], categoria: 'Transporte' },
+  { keywords: ['colegio','escuela','educac','univers','libro'], categoria: 'Escuela' },
+  { keywords: ['ande','copaco','essap','internet','telefon','tigo','claro'], categoria: 'Servicios' },
+  { keywords: ['taxi','uber','transport','bus'], categoria: 'Transporte' },
+  { keywords: ['ropa','zara','h&m','vestim'], categoria: 'Ropa' },
+  { keywords: ['futbol','fútbol','deport'], categoria: 'Fútbol Niños' },
 ]
 
 function parsearTextoOcr(texto: string) {
@@ -44,29 +51,28 @@ function parsearTextoOcr(texto: string) {
   }
   if (!fecha) fecha = new Date().toISOString().split('T')[0]
 
-  let proveedor = ''
+  let descripcion = ''
   for (const linea of lineas) {
     if (/beneficiario|destinatario|a favor de|proveedor/i.test(linea)) {
-      proveedor = linea.replace(/.*?:\s*/, '').trim()
+      descripcion = linea.replace(/.*?:\s*/, '').trim()
       break
     }
   }
 
-  let concepto = ''
-  if (/transfer|envio|env[ií]o/i.test(todo)) concepto = 'Transferencia'
-  else if (/farmac|medicam|salud|clinic|hospital|doctor/i.test(todo)) concepto = 'Salud'
-  else if (/superm|almac|aliment|comida|market/i.test(todo)) concepto = 'Alimentación'
-  else if (/combusti|nafta|gasolina|petro/i.test(todo)) concepto = 'Combustible'
-  else if (/colegio|escuela|educac|univers/i.test(todo)) concepto = 'Educación'
-  else if (/ande|copaco|essap|servicio|luz|agua|gas\b/i.test(todo)) concepto = 'Servicios'
-  else if (/taxi|uber|transport|bus\b/i.test(todo)) concepto = 'Transporte'
+  let categoriaNombre = 'Otro'
+  for (const { keywords, categoria } of CATEGORIA_DESDE_TEXTO) {
+    if (keywords.some(kw => todo.includes(kw))) {
+      categoriaNombre = categoria
+      break
+    }
+  }
 
-  return { monto, fecha, proveedor, concepto }
+  return { monto, fecha, descripcion, categoriaNombre }
 }
 
 export default function FacturasPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
-  const [conceptos, setConceptos] = useState<Concepto[]>([])
+  const [categorias, setCategorias] = useState<Categoria[]>([])
 
   const [imagen, setImagen] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -79,44 +85,32 @@ export default function FacturasPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
 
+  const [monto, setMonto] = useState('')
+  const [persona, setPersona] = useState('')
+  const [descripcion, setDescripcion] = useState('')
+  const [categoriaId, setCategoriaId] = useState('')
+  const [fecha, setFecha] = useState('')
+  const [nota, setNota] = useState('')
+
   useEffect(() => {
     setClipboardSoportado(
       typeof navigator !== 'undefined' &&
       !!navigator.clipboard &&
       typeof (navigator.clipboard as Clipboard & { read?: unknown }).read === 'function'
     )
-  }, [])
-
-  const [monto, setMonto] = useState('')
-  const [persona, setPersona] = useState('')
-  const [concepto, setConcepto] = useState('')
-  const [fecha, setFecha] = useState('')
-  const [nota, setNota] = useState('')
-
-  useEffect(() => {
     fetch('/api/personas').then(r => r.json()).then(data => {
       if (Array.isArray(data)) setPersonas(data)
     })
-  }, [])
-
-  useEffect(() => {
-    if (!persona) { setConceptos([]); return }
-    const p = personas.find(x => x.nombre === persona)
-    if (!p) return
-    fetch(`/api/conceptos?persona_id=${p.id}`).then(r => r.json()).then(data => {
-      if (Array.isArray(data)) setConceptos(data)
+    fetch('/api/categorias').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setCategorias(data)
     })
-  }, [persona, personas])
+  }, [])
 
   async function handleFile(file: File) {
     setImagen(file)
-    setOcrHecho(false)
-    setError(null)
-    setGuardado(false)
-    setMonto(''); setPersona(''); setConcepto(''); setFecha(''); setNota('')
-    const url = URL.createObjectURL(file)
-    setPreview(url)
-
+    setOcrHecho(false); setError(null); setGuardado(false)
+    setMonto(''); setPersona(''); setDescripcion(''); setCategoriaId(''); setFecha(''); setNota('')
+    setPreview(URL.createObjectURL(file))
     setCargando(true)
     try {
       const { createWorker } = await import('tesseract.js')
@@ -127,8 +121,10 @@ export default function FacturasPage() {
       const parsed = parsearTextoOcr(text)
       setMonto(parsed.monto)
       setFecha(parsed.fecha)
-      setNota(parsed.proveedor)
-      setConcepto(parsed.concepto)
+      setDescripcion(parsed.descripcion)
+      // Pre-seleccionar categoría por nombre
+      const cat = categorias.find(c => c.nombre === parsed.categoriaNombre)
+      if (cat) setCategoriaId(cat.id)
       setOcrHecho(true)
     } catch (e: unknown) {
       console.error('OCR error:', e)
@@ -147,8 +143,7 @@ export default function FacturasPage() {
         const tipoImagen = item.types.find((t: string) => t.startsWith('image/'))
         if (tipoImagen) {
           const blob = await item.getType(tipoImagen)
-          const file = new File([blob], 'portapapeles.png', { type: tipoImagen })
-          handleFile(file)
+          handleFile(new File([blob], 'portapapeles.png', { type: tipoImagen }))
           return
         }
       }
@@ -158,30 +153,18 @@ export default function FacturasPage() {
     }
   }
 
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
-  }
-
   function reset() {
-    setImagen(null); setPreview(null); setOcrHecho(false)
-    setGuardado(false); setMonto(''); setPersona(''); setConcepto('')
+    setImagen(null); setPreview(null); setOcrHecho(false); setGuardado(false)
+    setMonto(''); setPersona(''); setDescripcion(''); setCategoriaId('')
     setFecha(''); setNota(''); setError(null)
   }
 
   async function guardarGasto() {
     const montoNum = parseInt(monto)
-    if (!montoNum || montoNum <= 0) {
-      setError('El monto debe ser mayor a cero.')
-      return
-    }
-    if (!persona) {
-      setError('Seleccioná una persona.')
-      return
-    }
-    setGuardando(true)
-    setError(null)
+    if (!montoNum || montoNum <= 0) { setError('El monto debe ser mayor a cero.'); return }
+    if (!persona) { setError('Seleccioná una persona.'); return }
+    if (!categoriaId) { setError('Seleccioná una categoría.'); return }
+    setGuardando(true); setError(null)
     try {
       const res = await fetch('/api/gastos', {
         method: 'POST',
@@ -189,7 +172,8 @@ export default function FacturasPage() {
         body: JSON.stringify({
           fecha,
           persona_nombre: persona,
-          concepto_nombre: concepto || 'Otro',
+          descripcion: descripcion || nota || 'Comprobante',
+          categoria_id: categoriaId,
           monto: montoNum,
           nota,
           fuente: 'ocr',
@@ -197,7 +181,7 @@ export default function FacturasPage() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setError(body.error ?? 'No se pudo guardar el gasto. Intentá de nuevo.')
+        setError(body.error ?? 'No se pudo guardar el gasto.')
       } else {
         setGuardado(true)
       }
@@ -208,10 +192,7 @@ export default function FacturasPage() {
     }
   }
 
-  // Lista de categorías: de la DB si hay persona seleccionada, fallback a lista fija
-  const categorias = conceptos.length > 0
-    ? conceptos.map(c => c.nombre)
-    : CONCEPTOS_FALLBACK
+  const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
 
   return (
     <div className="space-y-5 max-w-lg">
@@ -226,26 +207,18 @@ export default function FacturasPage() {
         onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
 
       {!imagen ? (
-        <div className="space-y-3" onDrop={onDrop} onDragOver={e => e.preventDefault()}>
-          <button
-            onClick={() => cameraRef.current?.click()}
-            className="w-full flex items-center justify-center gap-3 bg-[#2C3E50] text-white py-5 rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform shadow-md"
-          >
+        <div className="space-y-3" onDrop={e => { e.preventDefault(); e.dataTransfer.files[0] && handleFile(e.dataTransfer.files[0]) }} onDragOver={e => e.preventDefault()}>
+          <button onClick={() => cameraRef.current?.click()}
+            className="w-full flex items-center justify-center gap-3 bg-[#2C3E50] text-white py-5 rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform shadow-md">
             <Camera size={22}/> Sacar foto del comprobante
           </button>
           <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => inputRef.current?.click()}
-              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-            >
+            <button onClick={() => inputRef.current?.click()}
+              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 transition-colors">
               <ImageIcon size={18}/> Galería
             </button>
-            <button
-              onClick={pegarDesdePortapapeles}
-              disabled={!clipboardSoportado}
-              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title={clipboardSoportado ? 'Pegar imagen del portapapeles' : 'Tu navegador no soporta pegar imágenes'}
-            >
+            <button onClick={pegarDesdePortapapeles} disabled={!clipboardSoportado}
+              className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 text-gray-500 py-4 rounded-2xl font-medium text-sm hover:border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <Clipboard size={18}/> Pegar
             </button>
           </div>
@@ -273,28 +246,23 @@ export default function FacturasPage() {
                   </div>
                 )}
               </div>
-              <button onClick={reset} className="text-gray-300 hover:text-gray-500 shrink-0">
-                <X size={18}/>
-              </button>
+              <button onClick={reset} className="text-gray-300 hover:text-gray-500 shrink-0"><X size={18}/></button>
             </div>
           </div>
 
           {!guardado && (
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-4">
               <h3 className="font-semibold text-gray-700 text-sm">
                 {ocrHecho && monto ? 'Revisá y confirmá los datos' : 'Completá los datos'}
               </h3>
+
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Monto (₲)</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={monto}
-                  onChange={e => setMonto(e.target.value)}
+                <input type="number" inputMode="numeric" value={monto} onChange={e => setMonto(e.target.value)}
                   placeholder="ej: 104000"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Persona</label>
@@ -305,14 +273,29 @@ export default function FacturasPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
-                  <select value={concepto} onChange={e => setConcepto(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
-                    <option value="">Seleccioná</option>
-                    {categorias.map(c => <option key={c}>{c}</option>)}
-                  </select>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Descripción</label>
+                  <input type="text" value={descripcion} onChange={e => setDescripcion(e.target.value)}
+                    placeholder="Proveedor o beneficiario"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">Categoría</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {categorias.map(c => (
+                    <button key={c.id} type="button" onClick={() => setCategoriaId(c.id)}
+                      className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                        categoriaId === c.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                      }`}
+                      style={categoriaId === c.id ? { backgroundColor: c.color, borderColor: c.color } : {}}>
+                      <span>{c.icono}</span>
+                      <span className="leading-tight text-center" style={{ fontSize: '10px' }}>{c.nombre}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
@@ -320,26 +303,24 @@ export default function FacturasPage() {
                     className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Nota / beneficiario</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Nota</label>
                   <input type="text" value={nota} onChange={e => setNota(e.target.value)}
-                    placeholder="ej: Farmacia"
+                    placeholder="Opcional"
                     className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                 </div>
               </div>
 
               {error && (
                 <div className="flex items-start gap-2 text-red-600 text-sm bg-red-50 border border-red-100 rounded-xl p-3">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5"/>
-                  <span>{error}</span>
+                  <AlertCircle size={15} className="shrink-0 mt-0.5"/><span>{error}</span>
                 </div>
               )}
 
-              <button
-                onClick={guardarGasto}
-                disabled={!monto || parseInt(monto) <= 0 || !persona || cargando || guardando}
-                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 active:scale-[0.98] flex items-center justify-center gap-2"
-              >
+              <button onClick={guardarGasto}
+                disabled={!monto || parseInt(monto) <= 0 || !persona || !categoriaId || cargando || guardando}
+                className="w-full bg-emerald-600 text-white py-4 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 active:scale-[0.98] flex items-center justify-center gap-2">
                 {guardando && <Loader2 size={18} className="animate-spin"/>}
+                {categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
                 Guardar gasto
               </button>
             </div>
@@ -352,9 +333,11 @@ export default function FacturasPage() {
           <CheckCircle className="mx-auto text-emerald-500 mb-3" size={40}/>
           <p className="font-bold text-emerald-800 text-lg">¡Gasto guardado!</p>
           <p className="text-sm text-emerald-600 mt-1">
-            {formatGsCompleto(parseInt(monto))} · {persona} · {concepto}
+            {formatGsCompleto(parseInt(monto))} · {persona}
+            {categoriaSeleccionada && ` · ${categoriaSeleccionada.icono} ${categoriaSeleccionada.nombre}`}
           </p>
-          <button onClick={reset} className="mt-5 w-full flex items-center justify-center gap-2 border-2 border-emerald-300 text-emerald-700 py-3 rounded-xl font-medium text-sm hover:bg-emerald-100 transition-colors">
+          <button onClick={reset}
+            className="mt-5 w-full flex items-center justify-center gap-2 border-2 border-emerald-300 text-emerald-700 py-3 rounded-xl font-medium text-sm hover:bg-emerald-100 transition-colors">
             <Camera size={16}/> Subir otro comprobante
           </button>
         </div>

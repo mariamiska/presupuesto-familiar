@@ -4,6 +4,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 const PERSONAS = ['Augusto', 'Miska', 'Niños', 'Casa', 'Familia']
+const CATEGORIAS = [
+  'Alimentación','Vivienda','Transporte','Servicios','Salud',
+  'Escuela','Fútbol Niños','Entretenimiento','Ropa','Deudas','Regalos','Otro'
+]
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,19 +22,20 @@ export async function POST(req: NextRequest) {
     const prompt = `Sos un asistente de finanzas personales para una familia paraguaya. Analizá este comprobante (ticket, factura o transferencia bancaria) y extraé los datos en JSON.
 
 Personas posibles: ${PERSONAS.join(', ')}.
-Si el titular es "Augusto Nicolas Servin Pappalardo" → persona = "Augusto".
-Si el titular es "Miska" o nombre femenino → persona = "Miska".
-Si no podés determinar → persona = "".
+Si el titular es "Augusto Nicolas Servin Pappalardo" → persona_sugerida = "Augusto".
+Si el titular es "Miska" o nombre femenino → persona_sugerida = "Miska".
+Si no podés determinar → persona_sugerida = "".
+
+Categorías posibles (elegí la más apropiada): ${CATEGORIAS.join(', ')}.
 
 Respondé SOLO con JSON válido, sin texto adicional:
 {
   "monto": número en guaraníes (sin puntos ni comas),
-  "proveedor": "nombre del proveedor o beneficiario",
+  "descripcion": "nombre del proveedor, comercio o beneficiario",
   "fecha": "YYYY-MM-DD",
-  "tipo": "transferencia" | "compra" | "pago_servicio" | "otro",
   "persona_sugerida": "Augusto" | "Miska" | "Niños" | "Casa" | "Familia" | "",
-  "concepto_sugerido": categoría sugerida en español,
-  "referencia": "número de operación o referencia si existe"
+  "categoria_sugerida": una de las categorías listadas arriba,
+  "referencia": "número de operación o referencia si existe, o null"
 }`
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
@@ -47,10 +52,6 @@ Respondé SOLO con JSON válido, sin texto adicional:
     return NextResponse.json(data)
   } catch (e: unknown) {
     console.error('OCR error:', e)
-    const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json(
-      { error: msg },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
