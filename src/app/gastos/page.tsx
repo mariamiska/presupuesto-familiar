@@ -4,7 +4,7 @@ import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search, Re
 import { MESES, formatGsCompleto } from '@/lib/supabase'
 
 type Persona = { id: string; nombre: string; color: string }
-type Concepto = { id: string; nombre: string; persona_id: string }
+type Categoria = { id: string; nombre: string; icono: string; color: string }
 
 const FUENTE_LABEL: Record<string, string> = { manual: '✏️', ocr: '📷', whatsapp: '💬', email: '📧' }
 
@@ -14,6 +14,7 @@ type Gasto = {
   id: string
   fecha: string
   monto: number
+  descripcion?: string
   nota?: string
   fuente: string
   cuota_actual?: number
@@ -22,7 +23,7 @@ type Gasto = {
   tipo_recurrencia?: TipoRecurrencia
   suscripcion_id?: string
   personas?: { nombre: string; color: string }
-  conceptos?: { nombre: string }
+  categorias?: { nombre: string; color: string; icono: string }
 }
 
 const RECURRENCIA_BADGE: Record<string, { label: string; cls: string }> = {
@@ -34,13 +35,14 @@ const mesActual = new Date().getMonth() + 1
 
 export default function GastosPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
-  const [conceptos, setConceptos] = useState<Concepto[]>([])
+  const [categorias, setCategorias] = useState<Categoria[]>([])
 
   const [showForm, setShowForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
   const [persona, setPersona] = useState('')
-  const [concepto, setConcepto] = useState('')
+  const [descripcion, setDescripcion] = useState('')
+  const [categoriaId, setCategoriaId] = useState('')
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
@@ -50,12 +52,14 @@ export default function GastosPage() {
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [cargando, setCargando] = useState(true)
   const [filtroPersona, setFiltroPersona] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
   const [busqueda, setBusqueda] = useState('')
 
   const [gastoEditando, setGastoEditando] = useState<Gasto | null>(null)
   const [editMonto, setEditMonto] = useState('')
   const [editPersona, setEditPersona] = useState('')
-  const [editConcepto, setEditConcepto] = useState('')
+  const [editDescripcion, setEditDescripcion] = useState('')
+  const [editCategoriaId, setEditCategoriaId] = useState('')
   const [editFecha, setEditFecha] = useState('')
   const [editNota, setEditNota] = useState('')
   const [editCuotaActual, setEditCuotaActual] = useState('')
@@ -66,35 +70,14 @@ export default function GastosPage() {
   const [eliminando, setEliminando] = useState(false)
   const [cancelandoSuscripcion, setCancelandoSuscripcion] = useState(false)
 
-  const [conceptosEdit, setConceptosEdit] = useState<Concepto[]>([])
-
-  // Cargar personas al montar
   useEffect(() => {
     fetch('/api/personas').then(r => r.json()).then(data => {
       if (Array.isArray(data)) setPersonas(data)
     })
+    fetch('/api/categorias').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setCategorias(data)
+    })
   }, [])
-
-  // Cargar conceptos cuando cambia persona en el formulario nuevo
-  useEffect(() => {
-    if (!persona) { setConceptos([]); setConcepto(''); return }
-    const p = personas.find(x => x.nombre === persona)
-    if (!p) return
-    fetch(`/api/conceptos?persona_id=${p.id}`).then(r => r.json()).then(data => {
-      if (Array.isArray(data)) setConceptos(data)
-    })
-    setConcepto('')
-  }, [persona, personas])
-
-  // Cargar conceptos cuando cambia persona en el modal de edición
-  useEffect(() => {
-    if (!editPersona) { setConceptosEdit([]); return }
-    const p = personas.find(x => x.nombre === editPersona)
-    if (!p) return
-    fetch(`/api/conceptos?persona_id=${p.id}`).then(r => r.json()).then(data => {
-      if (Array.isArray(data)) setConceptosEdit(data)
-    })
-  }, [editPersona, personas])
 
   const cargarGastos = useCallback(async () => {
     setCargando(true)
@@ -106,19 +89,27 @@ export default function GastosPage() {
 
   useEffect(() => { cargarGastos() }, [cargarGastos])
 
+  function resetForm() {
+    setMonto(''); setNota(''); setPersona('')
+    setDescripcion(''); setCategoriaId(''); setTipoRecurrencia(null)
+  }
+
   async function guardar() {
     const montoNum = parseInt(monto)
-    if (!montoNum || montoNum <= 0 || !persona || !concepto) return
+    if (!montoNum || montoNum <= 0 || !persona || !descripcion || !categoriaId) return
     setGuardando(true)
     const res = await fetch('/api/gastos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fecha, persona_nombre: persona, concepto_nombre: concepto, monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia }),
+      body: JSON.stringify({
+        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId,
+        monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
+      }),
     })
     setGuardando(false)
     if (res.ok) {
       setGuardado(true)
-      setTimeout(() => { setGuardado(false); setShowForm(false); setMonto(''); setNota(''); setPersona(''); setConcepto(''); setTipoRecurrencia(null) }, 1500)
+      setTimeout(() => { setGuardado(false); setShowForm(false); resetForm() }, 1500)
       cargarGastos()
     }
   }
@@ -127,7 +118,8 @@ export default function GastosPage() {
     setGastoEditando(g)
     setEditMonto(String(g.monto))
     setEditPersona(g.personas?.nombre ?? '')
-    setEditConcepto(g.conceptos?.nombre ?? '')
+    setEditDescripcion(g.descripcion ?? '')
+    setEditCategoriaId(g.categorias ? categorias.find(c => c.nombre === g.categorias!.nombre)?.id ?? '' : '')
     setEditFecha(g.fecha)
     setEditNota(g.nota ?? '')
     setEditCuotaActual(g.cuota_actual ? String(g.cuota_actual) : '')
@@ -142,10 +134,11 @@ export default function GastosPage() {
     if (!montoNum || montoNum <= 0) return
     setGuardandoEdit(true)
 
-    // Primero actualizar datos principales si cambiaron
-    const cambiosPrincipales = editMonto !== String(gastoEditando.monto)
+    const cambiosPrincipales =
+      editMonto !== String(gastoEditando.monto)
       || editPersona !== gastoEditando.personas?.nombre
-      || editConcepto !== gastoEditando.conceptos?.nombre
+      || editDescripcion !== (gastoEditando.descripcion ?? '')
+      || editCategoriaId !== (gastoEditando.categorias ? categorias.find(c => c.nombre === gastoEditando.categorias!.nombre)?.id ?? '' : '')
       || editFecha !== gastoEditando.fecha
       || editNota !== (gastoEditando.nota ?? '')
 
@@ -155,7 +148,8 @@ export default function GastosPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           persona_nombre: editPersona,
-          concepto_nombre: editConcepto,
+          descripcion: editDescripcion,
+          categoria_id: editCategoriaId,
           monto: montoNum,
           fecha: editFecha,
           nota: editNota,
@@ -163,7 +157,6 @@ export default function GastosPage() {
       })
     }
 
-    // Actualizar cuota/vencimiento
     await fetch(`/api/gastos/${gastoEditando.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -206,13 +199,14 @@ export default function GastosPage() {
   }
 
   function exportarCSV() {
-    const gastosFiltrados = gastosFiltradosCalc()
-    const cabecera = 'Fecha,Persona,Categoría,Monto,Nota,Fuente'
-    const filas = gastosFiltrados.map(g =>
+    const filtrados = gastosFiltradosCalc()
+    const cabecera = 'Fecha,Persona,Descripción,Categoría,Monto,Nota,Fuente'
+    const filas = filtrados.map(g =>
       [
         g.fecha,
         g.personas?.nombre ?? '',
-        g.conceptos?.nombre ?? '',
+        `"${(g.descripcion ?? '').replace(/"/g, '""')}"`,
+        g.categorias?.nombre ?? '',
         g.monto,
         `"${(g.nota ?? '').replace(/"/g, '""')}"`,
         g.fuente,
@@ -231,19 +225,24 @@ export default function GastosPage() {
   function gastosFiltradosCalc() {
     return gastos.filter(g => {
       const matchPersona = !filtroPersona || g.personas?.nombre === filtroPersona
+      const matchCategoria = !filtroCategoria || g.categorias?.nombre === filtroCategoria
       const q = busqueda.toLowerCase()
       const matchBusqueda = !q
-        || (g.conceptos?.nombre ?? '').toLowerCase().includes(q)
+        || (g.descripcion ?? '').toLowerCase().includes(q)
         || (g.nota ?? '').toLowerCase().includes(q)
         || (g.personas?.nombre ?? '').toLowerCase().includes(q)
-      return matchPersona && matchBusqueda
+        || (g.categorias?.nombre ?? '').toLowerCase().includes(q)
+      return matchPersona && matchCategoria && matchBusqueda
     })
   }
 
   const gastosFiltrados = gastosFiltradosCalc()
   const totalMes = gastos.reduce((s, g) => s + g.monto, 0)
   const totalFiltrado = gastosFiltrados.reduce((s, g) => s + g.monto, 0)
-  const hayFiltro = !!filtroPersona || !!busqueda
+  const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda
+
+  const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
+  const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-2xl">
@@ -267,84 +266,82 @@ export default function GastosPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Monto (₲)</label>
               <input
-                type="number"
-                inputMode="numeric"
-                value={monto}
-                onChange={e => setMonto(e.target.value)}
-                placeholder="ej: 150000"
+                type="number" inputMode="numeric" value={monto}
+                onChange={e => setMonto(e.target.value)} placeholder="ej: 150000"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Persona</label>
-                <select
-                  value={persona}
-                  onChange={e => setPersona(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
-                >
+                <select value={persona} onChange={e => setPersona(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
                   <option value="">Seleccioná</option>
                   {personas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                 <input
-                  list="conceptos-list"
-                  value={concepto}
-                  onChange={e => setConcepto(e.target.value)}
-                  placeholder={persona ? 'Seleccioná o escribí nueva' : 'Primero elegí persona'}
-                  disabled={!persona}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+                  type="text" value={descripcion} onChange={e => setDescripcion(e.target.value)}
+                  placeholder="Netflix, Supermercado..."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-                <datalist id="conceptos-list">
-                  {conceptos.map(c => <option key={c.id} value={c.nombre}/>)}
-                </datalist>
               </div>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {categorias.map(c => (
+                  <button
+                    key={c.id} type="button" onClick={() => setCategoriaId(c.id)}
+                    className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
+                      categoriaId === c.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                    }`}
+                    style={categoriaId === c.id ? { backgroundColor: c.color, borderColor: c.color } : {}}
+                  >
+                    <span className="text-lg">{c.icono}</span>
+                    {c.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                <input
-                  type="date"
-                  value={fecha}
-                  onChange={e => setFecha(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
-                <input
-                  type="text"
-                  value={nota}
-                  onChange={e => setNota(e.target.value)}
+                <input type="text" value={nota} onChange={e => setNota(e.target.value)}
                   placeholder="Descripción breve"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de gasto</label>
               <div className="flex gap-2">
                 {([null, 'suscripcion', 'fijo'] as TipoRecurrencia[]).map(t => (
-                  <button
-                    key={String(t)}
-                    type="button"
-                    onClick={() => setTipoRecurrencia(t)}
+                  <button key={String(t)} type="button" onClick={() => setTipoRecurrencia(t)}
                     className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                       tipoRecurrencia === t
                         ? t === 'suscripcion' ? 'bg-purple-600 text-white border-purple-600'
                           : t === 'fijo' ? 'bg-amber-500 text-white border-amber-500'
                           : 'bg-gray-700 text-white border-gray-700'
                         : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                    }`}
-                  >
+                    }`}>
                     {t === null ? 'Normal' : t === 'suscripcion' ? '🔄 Suscripción' : '📌 Fijo mensual'}
                   </button>
                 ))}
               </div>
             </div>
           </div>
+
           {guardado ? (
             <div className="flex items-center gap-2 text-emerald-600 font-semibold py-1">
               <CheckCircle size={18}/> ¡Guardado!
@@ -353,16 +350,15 @@ export default function GastosPage() {
             <div className="flex gap-3">
               <button
                 onClick={guardar}
-                disabled={!monto || parseInt(monto) <= 0 || !persona || !concepto || guardando}
+                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || guardando}
                 className="flex-1 bg-emerald-600 text-white py-3.5 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95"
               >
                 {guardando && <Loader2 size={18} className="animate-spin"/>}
+                {categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
                 Guardar
               </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 text-base"
-              >
+              <button onClick={() => { setShowForm(false); resetForm() }}
+                className="px-5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 text-base">
                 Cancelar
               </button>
             </div>
@@ -385,56 +381,61 @@ export default function GastosPage() {
             </div>
             <div className="flex items-center gap-2">
               {gastos.length > 0 && (
-                <button
-                  onClick={exportarCSV}
+                <button onClick={exportarCSV}
                   className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5"
-                  title="Exportar CSV"
-                >
+                  title="Exportar CSV">
                   <Download size={13}/> CSV
                 </button>
               )}
-              <select
-                value={mesSeleccionado}
-                onChange={e => setMesSeleccionado(parseInt(e.target.value))}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none"
-              >
+              <select value={mesSeleccionado} onChange={e => setMesSeleccionado(parseInt(e.target.value))}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none">
                 {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
             </div>
           </div>
 
-          {/* Búsqueda */}
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input
-              type="text"
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar por categoría, nota o persona..."
-              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
+            <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por descripción, categoría, nota o persona..."
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"/>
           </div>
-          {/* Filtro por persona — chips */}
-          {personas.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setFiltroPersona('')}
+
+          {/* Filtro por persona */}
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setFiltroPersona('')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                !filtroPersona ? 'bg-[#2C3E50] text-white border-[#2C3E50]' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>
+              Todos
+            </button>
+            {personas.map(p => (
+              <button key={p.id} onClick={() => setFiltroPersona(filtroPersona === p.nombre ? '' : p.nombre)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                  !filtroPersona ? 'bg-[#2C3E50] text-white border-[#2C3E50]' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  filtroPersona === p.nombre ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 }`}
-              >
-                Todos
+                style={filtroPersona === p.nombre ? { backgroundColor: p.color, borderColor: p.color } : {}}>
+                {p.nombre}
               </button>
-              {personas.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setFiltroPersona(filtroPersona === p.nombre ? '' : p.nombre)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    filtroPersona === p.nombre ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+            ))}
+          </div>
+
+          {/* Filtro por categoría */}
+          {categorias.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setFiltroCategoria('')}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  !filtroCategoria ? 'bg-gray-700 text-white border-gray-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}>
+                Todas
+              </button>
+              {categorias.map(c => (
+                <button key={c.id} onClick={() => setFiltroCategoria(filtroCategoria === c.nombre ? '' : c.nombre)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    filtroCategoria === c.nombre ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
-                  style={filtroPersona === p.nombre ? { backgroundColor: p.color, borderColor: p.color } : {}}
-                >
-                  {p.nombre}
+                  style={filtroCategoria === c.nombre ? { backgroundColor: c.color, borderColor: c.color } : {}}>
+                  {c.icono} {c.nombre}
                 </button>
               ))}
             </div>
@@ -452,14 +453,15 @@ export default function GastosPage() {
         ) : (
           <div className="divide-y divide-gray-50">
             {gastosFiltrados.map(g => (
-              <div
-                key={g.id}
+              <div key={g.id}
                 className="px-4 py-4 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => abrirEdicion(g)}
-              >
+                onClick={() => abrirEdicion(g)}>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-gray-800">{g.conceptos?.nombre ?? '—'}</span>
+                    {g.categorias && (
+                      <span className="text-sm" title={g.categorias.nombre}>{g.categorias.icono}</span>
+                    )}
+                    <span className="font-medium text-gray-800">{g.descripcion ?? '—'}</span>
                     {g.tipo_recurrencia && RECURRENCIA_BADGE[g.tipo_recurrencia] && (
                       <span className={`text-xs border px-1.5 py-0.5 rounded font-medium ${RECURRENCIA_BADGE[g.tipo_recurrencia].cls}`}>
                         {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
@@ -476,6 +478,9 @@ export default function GastosPage() {
                     <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
                     {' · '}{new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-PY')}
                     {g.nota && ` · ${g.nota}`}
+                    {g.categorias && (
+                      <span className="ml-1" style={{ color: g.categorias.color }}>· {g.categorias.nombre}</span>
+                    )}
                   </p>
                 </div>
                 <span className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</span>
@@ -485,7 +490,7 @@ export default function GastosPage() {
         )}
       </div>
 
-      {/* Modal de edición completo */}
+      {/* Modal de edición */}
       {gastoEditando && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
@@ -497,42 +502,45 @@ export default function GastosPage() {
                 </button>
               </div>
 
-              {/* Datos principales */}
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Monto (₲)</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={editMonto}
-                    onChange={e => setEditMonto(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
+                  <input type="number" inputMode="numeric" value={editMonto} onChange={e => setEditMonto(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Persona</label>
-                    <select value={editPersona} onChange={e => { setEditPersona(e.target.value); setEditConcepto('') }}
+                    <select value={editPersona} onChange={e => setEditPersona(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
                       <option value="">Seleccioná</option>
                       {personas.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
-                    <input
-                      list="conceptos-edit-list"
-                      value={editConcepto}
-                      onChange={e => setEditConcepto(e.target.value)}
-                      placeholder="Seleccioná o escribí"
-                      disabled={!editPersona}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
-                    />
-                    <datalist id="conceptos-edit-list">
-                      {conceptosEdit.map(c => <option key={c.id} value={c.nombre}/>)}
-                    </datalist>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Descripción</label>
+                    <input type="text" value={editDescripcion} onChange={e => setEditDescripcion(e.target.value)}
+                      placeholder="Netflix, Farmacia..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {categorias.map(c => (
+                      <button key={c.id} type="button" onClick={() => setEditCategoriaId(c.id)}
+                        className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg text-xs font-medium border transition-colors ${
+                          editCategoriaId === c.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                        }`}
+                        style={editCategoriaId === c.id ? { backgroundColor: c.color, borderColor: c.color } : {}}>
+                        <span>{c.icono}</span>
+                        <span className="leading-tight text-center" style={{ fontSize: '10px' }}>{c.nombre}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
@@ -547,30 +555,24 @@ export default function GastosPage() {
                 </div>
               </div>
 
-              {/* Tipo de recurrencia */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-1"><Repeat2 size={12}/> Tipo de gasto</label>
                 <div className="flex gap-1.5">
                   {([null, 'suscripcion', 'fijo'] as TipoRecurrencia[]).map(t => (
-                    <button
-                      key={String(t)}
-                      type="button"
-                      onClick={() => setEditTipoRecurrencia(t)}
+                    <button key={String(t)} type="button" onClick={() => setEditTipoRecurrencia(t)}
                       className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-colors ${
                         editTipoRecurrencia === t
                           ? t === 'suscripcion' ? 'bg-purple-600 text-white border-purple-600'
                             : t === 'fijo' ? 'bg-amber-500 text-white border-amber-500'
                             : 'bg-gray-700 text-white border-gray-700'
                           : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                      }`}
-                    >
+                      }`}>
                       {t === null ? 'Normal' : t === 'suscripcion' ? '🔄 Suscripción' : '📌 Fijo'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Cuota y vencimiento */}
               <div className="bg-blue-50 rounded-xl p-3 space-y-3">
                 <div className="flex items-center gap-2 text-blue-700 font-semibold text-xs">
                   <CreditCard size={14}/> Cuota y vencimiento (opcional)
@@ -599,32 +601,24 @@ export default function GastosPage() {
 
             {gastoEditando.suscripcion_id && (
               <div className="px-5 pb-3">
-                <button
-                  onClick={cancelarSuscripcion}
-                  disabled={cancelandoSuscripcion}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-40"
-                >
-                  {cancelandoSuscripcion
-                    ? <Loader2 size={14} className="animate-spin"/>
-                    : <XCircle size={14}/>}
+                <button onClick={cancelarSuscripcion} disabled={cancelandoSuscripcion}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-40">
+                  {cancelandoSuscripcion ? <Loader2 size={14} className="animate-spin"/> : <XCircle size={14}/>}
                   {gastoEditando.tipo_recurrencia === 'fijo' ? 'Cancelar gasto fijo' : 'Cancelar suscripción'}
                 </button>
               </div>
             )}
+
             <div className="px-5 pb-5 flex gap-2">
-              <button
-                onClick={guardarEdicion}
+              <button onClick={guardarEdicion}
                 disabled={guardandoEdit || !editMonto || parseInt(editMonto) <= 0}
-                className="flex-1 bg-[#2C3E50] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-[#34495E] transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-              >
+                className="flex-1 bg-[#2C3E50] text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-[#34495E] transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
                 {guardandoEdit ? <Loader2 size={15} className="animate-spin"/> : null}
+                {editCategoriaSeleccionada && <span>{editCategoriaSeleccionada.icono}</span>}
                 Guardar
               </button>
-              <button
-                onClick={eliminarGasto}
-                disabled={eliminando}
-                className="flex items-center gap-1.5 px-4 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors"
-              >
+              <button onClick={eliminarGasto} disabled={eliminando}
+                className="flex items-center gap-1.5 px-4 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors">
                 {eliminando ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>}
                 Eliminar
               </button>

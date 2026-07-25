@@ -8,10 +8,11 @@ type Gasto = {
   id: string
   fecha: string
   monto: number
+  descripcion?: string
   nota?: string
   tipo_recurrencia: 'suscripcion' | 'fijo'
   personas?: { nombre: string; color: string }
-  conceptos?: { nombre: string }
+  categorias?: { nombre: string; icono: string; color: string }
 }
 
 type Seccion = {
@@ -59,7 +60,7 @@ export default function RecurrentesPage() {
     const vistos = new Set<string>()
     const unicos: Gasto[] = []
     for (const g of filtrados) {
-      const key = `${g.conceptos?.nombre}|${g.personas?.nombre}`
+      const key = `${g.descripcion}|${g.personas?.nombre}`
       if (!vistos.has(key)) { vistos.add(key); unicos.push(g) }
     }
     return unicos
@@ -135,7 +136,10 @@ export default function RecurrentesPage() {
                   {items.map(g => (
                     <div key={g.id} className="px-4 py-3.5 flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-gray-800 text-sm">{g.conceptos?.nombre ?? '—'}</p>
+                        <p className="font-medium text-gray-800 text-sm">
+                        {g.categorias?.icono && <span className="mr-1">{g.categorias.icono}</span>}
+                        {g.descripcion ?? '—'}
+                      </p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
                           {g.nota && ` · ${g.nota}`}

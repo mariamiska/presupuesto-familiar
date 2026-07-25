@@ -2,13 +2,7 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { formatGs } from '@/lib/supabase'
 
-const COLORS = [
-  '#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6',
-  '#06B6D4','#F97316','#84CC16','#EC4899','#6366F1',
-  '#14B8A6','#FB923C',
-]
-
-type Item = { nombre: string; total: number }
+type Item = { nombre: string; total: number; color?: string; icono?: string }
 
 export function CategoryChart({ data }: { data: Item[] }) {
   if (!data.length) return null
@@ -32,13 +26,13 @@ export function CategoryChart({ data }: { data: Item[] }) {
             }
             labelLine={false}
           >
-            {data.map((_, i) => (
-              <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.color ?? '#9ca3af'} />
             ))}
           </Pie>
           <Tooltip
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter={(value: any, name: any) => [formatGs(Number(value)), String(name)]}
+            formatter={(value: any, name: any) => [formatGs(Number(value)), String(name)]}
             contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e5e7eb' }}
           />
           <Legend
@@ -46,12 +40,14 @@ export function CategoryChart({ data }: { data: Item[] }) {
           />
         </PieChart>
       </ResponsiveContainer>
-      {/* Tabla resumen */}
       <div className="mt-2 space-y-1.5">
-        {data.slice(0, 8).map((d, i) => (
+        {data.slice(0, 12).map((d) => (
           <div key={d.nombre} className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}/>
+              {d.icono
+                ? <span className="text-base leading-none">{d.icono}</span>
+                : <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color ?? '#9ca3af' }}/>
+              }
               <span className="text-gray-700">{d.nombre}</span>
             </div>
             <div className="flex items-center gap-3">
@@ -60,9 +56,6 @@ export function CategoryChart({ data }: { data: Item[] }) {
             </div>
           </div>
         ))}
-        {data.length > 8 && (
-          <p className="text-xs text-gray-400 text-right">+ {data.length - 8} categorías más</p>
-        )}
       </div>
     </div>
   )

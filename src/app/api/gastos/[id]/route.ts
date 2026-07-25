@@ -10,7 +10,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (body.action === 'cancelar_suscripcion') {
       const { data: gasto } = await db
         .from('gastos')
-        .select('suscripcion_id, fecha')
+        .select('suscripcion_id')
         .eq('id', params.id)
         .single()
 
@@ -34,28 +34,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (body.tipo_recurrencia === 'suscripcion' || body.tipo_recurrencia === 'fijo') {
       const { data: gastoActual } = await db
         .from('gastos')
-        .select('id, concepto_id, persona_id, monto, nota, fuente, fecha, suscripcion_id')
+        .select('id, descripcion, categoria_id, persona_id, monto, nota, fuente, fecha, suscripcion_id')
         .eq('id', params.id)
         .single()
 
       if (!gastoActual) return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 })
 
-      // Si ya tiene suscripcion_id, solo actualizar los campos extras
       if (!gastoActual.suscripcion_id) {
         const anio = new Date(gastoActual.fecha + 'T12:00:00').getFullYear()
         const suscripcion_id = crypto.randomUUID()
 
-        // Vincular gastos pasados del mismo concepto/persona en el mismo año
-        const inicioAnio = `${anio}-01-01`
-        const finAnio = `${anio}-12-31`
-
+        // Vincular gastos pasados del mismo periodo con la misma descripción y persona
         await db
           .from('gastos')
-          .update({ suscripcion_id, tipo_recurrencia: 'suscripcion' })
-          .eq('concepto_id', gastoActual.concepto_id)
+          .update({ suscripcion_id, tipo_recurrencia: body.tipo_recurrencia })
+          .eq('descripcion', gastoActual.descripcion)
           .eq('persona_id', gastoActual.persona_id)
-          .gte('fecha', inicioAnio)
-          .lte('fecha', finAnio)
+          .gte('fecha', `${anio}-01-01`)
+          .lte('fecha', `${anio}-12-31`)
           .is('suscripcion_id', null)
 
         // Crear meses futuros que falten
@@ -64,7 +60,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           .from('gastos')
           .select('fecha')
           .eq('suscripcion_id', suscripcion_id)
-          .gte('fecha', `${anio}-${String(mesActual).padStart(2, '0')}-01`)
 
         const mesesConGasto = new Set(
           (gastosExistentes ?? []).map(g => parseInt(g.fecha.split('-')[1]))
@@ -75,7 +70,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           if (!mesesConGasto.has(mes)) {
             gastosFuturos.push({
               fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
-              concepto_id: gastoActual.concepto_id,
+              descripcion: gastoActual.descripcion,
+              categoria_id: gastoActual.categoria_id,
               persona_id: gastoActual.persona_id,
               monto: gastoActual.monto,
               nota: gastoActual.nota ?? '',
@@ -93,7 +89,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
 
-    // Actualizar campos permitidos del gasto
+    // Actualizar campos permitidos
     const { cuota_actual, cuotas_total, fecha_vencimiento, tipo_recurrencia } = body
     const { data, error } = await db
       .from('gastos')
@@ -112,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json()
-    const { persona_nombre, concepto_nombre, monto, fecha, nota } = body
+    const { persona_nombre, descripcion, categoria_id, monto, fecha, nota } = body
     const db = supabaseAdmin()
 
     const { data: persona } = await db
@@ -122,27 +118,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       .single()
     if (!persona) return NextResponse.json({ error: `Persona "${persona_nombre}" no encontrada` }, { status: 400 })
 
-    let { data: concepto } = await db
-      .from('conceptos')
-      .select('id')
-      .ilike('nombre', concepto_nombre)
-      .eq('persona_id', persona.id)
-      .single()
-    if (!concepto) {
-      const { data: nuevo } = await db
-        .from('conceptos')
-        .insert({ nombre: concepto_nombre, persona_id: persona.id, es_fijo: false })
-        .select('id')
-        .single()
-      concepto = nuevo
-    }
-    if (!concepto) return NextResponse.json({ error: 'No se pudo crear el concepto' }, { status: 500 })
-
     const { data, error } = await db
       .from('gastos')
-      .update({ persona_id: persona.id, concepto_id: concepto.id, monto: parseInt(monto), fecha, nota: nota ?? '' })
+      .update({ persona_id: persona.id, descripcion, categoria_id, monto: parseInt(monto), fecha, nota: nota ?? '' })
       .eq('id', params.id)
-      .select('*, personas(nombre, color), conceptos(nombre)')
+      .select('*, personas(nombre, color), categorias(nombre, color, icono)')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)

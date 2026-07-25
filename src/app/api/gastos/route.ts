@@ -5,13 +5,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const mes = searchParams.get('mes')
   const anio = searchParams.get('anio') ?? new Date().getFullYear().toString()
-
-  const db = supabaseAdmin()
   const recurrentes = searchParams.get('recurrentes')
 
+  const db = supabaseAdmin()
   let query = db
     .from('gastos')
-    .select('*, personas(nombre, color), conceptos(nombre)')
+    .select('*, personas(nombre, color), categorias(nombre, color, icono)')
     .order('fecha', { ascending: false })
 
   if (recurrentes === '1') {
@@ -32,7 +31,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { fecha, persona_nombre, concepto_nombre, monto, nota, fuente = 'manual', tipo_recurrencia } = body
+    const { fecha, persona_nombre, descripcion, categoria_id, monto, nota, fuente = 'manual', tipo_recurrencia } = body
 
     const db = supabaseAdmin()
 
@@ -44,32 +43,16 @@ export async function POST(req: NextRequest) {
 
     if (!persona) return NextResponse.json({ error: `Persona "${persona_nombre}" no encontrada` }, { status: 400 })
 
-    let { data: concepto } = await db
-      .from('conceptos')
-      .select('id')
-      .ilike('nombre', concepto_nombre)
-      .eq('persona_id', persona.id)
-      .single()
-
-    if (!concepto) {
-      const { data: nuevo } = await db
-        .from('conceptos')
-        .insert({ nombre: concepto_nombre, persona_id: persona.id, es_fijo: false })
-        .select('id')
-        .single()
-      concepto = nuevo
-    }
-
-    if (!concepto) return NextResponse.json({ error: 'No se pudo crear el concepto' }, { status: 500 })
-
     const fechaBase = fecha ?? new Date().toISOString().split('T')[0]
+    const montoNum = parseInt(monto)
 
     if (tipo_recurrencia === 'suscripcion' || tipo_recurrencia === 'fijo') {
       const gastos = crearGastosRecurrentes({
         fechaBase,
-        concepto_id: concepto.id,
         persona_id: persona.id,
-        monto: parseInt(monto),
+        descripcion: descripcion ?? '',
+        categoria_id,
+        monto: montoNum,
         nota: nota ?? '',
         fuente,
         tipo_recurrencia,
@@ -84,9 +67,10 @@ export async function POST(req: NextRequest) {
       .from('gastos')
       .insert({
         fecha: fechaBase,
-        concepto_id: concepto.id,
+        descripcion: descripcion ?? '',
+        categoria_id,
         persona_id: persona.id,
-        monto: parseInt(monto),
+        monto: montoNum,
         nota: nota ?? '',
         fuente,
         pendiente_confirmacion: false,
@@ -103,17 +87,12 @@ export async function POST(req: NextRequest) {
 }
 
 function crearGastosRecurrentes({
-  fechaBase,
-  concepto_id,
-  persona_id,
-  monto,
-  nota,
-  fuente,
-  tipo_recurrencia,
+  fechaBase, persona_id, descripcion, categoria_id, monto, nota, fuente, tipo_recurrencia,
 }: {
   fechaBase: string
-  concepto_id: string
   persona_id: string
+  descripcion: string
+  categoria_id: string
   monto: number
   nota: string
   fuente: string
@@ -121,21 +100,17 @@ function crearGastosRecurrentes({
 }) {
   const suscripcion_id = crypto.randomUUID()
   const [anio, mesInicio, dia] = fechaBase.split('-').map(Number)
-  const gastos = []
 
-  for (let mes = mesInicio; mes <= 12; mes++) {
-    gastos.push({
-      fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
-      concepto_id,
-      persona_id,
-      monto,
-      nota,
-      fuente,
-      pendiente_confirmacion: false,
-      tipo_recurrencia,
-      suscripcion_id,
-    })
-  }
-
-  return gastos
+  return Array.from({ length: 13 - mesInicio }, (_, i) => ({
+    fecha: `${anio}-${String(mesInicio + i).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
+    descripcion,
+    categoria_id,
+    persona_id,
+    monto,
+    nota,
+    fuente,
+    pendiente_confirmacion: false,
+    tipo_recurrencia,
+    suscripcion_id,
+  }))
 }

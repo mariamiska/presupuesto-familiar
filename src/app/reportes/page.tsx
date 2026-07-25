@@ -24,7 +24,7 @@ export default async function ReportesPage({
       .gte('fecha', `${ANIO}-01-01`)
       .lte('fecha', `${ANIO}-12-31`),
     db.from('gastos')
-      .select('monto, conceptos(nombre)')
+      .select('monto, categorias(nombre, color, icono)')
       .gte('fecha', `${ANIO}-01-01`)
       .lte('fecha', `${ANIO}-12-31`),
   ])
@@ -39,14 +39,16 @@ export default async function ReportesPage({
   })
 
   // Agrupar gastos por categoría
-  const porCategoria: Record<string, number> = {}
+  const porCategoria: Record<string, { total: number; color: string; icono: string }> = {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   gastosCategorias?.forEach((g: any) => {
-    const nombre = g.conceptos?.nombre ?? 'Sin categoría'
-    porCategoria[nombre] = (porCategoria[nombre] ?? 0) + g.monto
+    const cat = g.categorias
+    const nombre = cat?.nombre ?? 'Sin categoría'
+    if (!porCategoria[nombre]) porCategoria[nombre] = { total: 0, color: cat?.color ?? '#9ca3af', icono: cat?.icono ?? '❓' }
+    porCategoria[nombre].total += g.monto
   })
   const categoriaData = Object.entries(porCategoria)
-    .map(([nombre, total]) => ({ nombre, total }))
+    .map(([nombre, { total, color, icono }]) => ({ nombre, total, color, icono }))
     .sort((a, b) => b.total - a.total)
 
   const mesActual = new Date().getMonth() + 1

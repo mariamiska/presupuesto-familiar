@@ -56,7 +56,7 @@ export default async function Dashboard() {
       .gte('fecha', primerDia(ANIO_ANT, MES_ANT))
       .lte('fecha', ultimoDia(ANIO_ANT, MES_ANT)),
     db.from('gastos')
-      .select('id, fecha_vencimiento, monto, conceptos(nombre), personas(nombre, color)')
+      .select('id, fecha_vencimiento, monto, descripcion, personas(nombre, color)')
       .gte('fecha_vencimiento', new Date().toISOString().split('T')[0])
       .lte('fecha_vencimiento', new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0])
       .order('fecha_vencimiento', { ascending: true })
@@ -228,8 +228,7 @@ export default async function Dashboard() {
               id: string
               fecha_vencimiento: string
               monto: number
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              conceptos: any
+              descripcion: string
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               personas: any
             }) => {
@@ -239,7 +238,7 @@ export default async function Dashboard() {
               return (
                 <div key={v.id} className={`flex items-center justify-between rounded-lg px-4 py-3.5 ${urgente ? 'bg-red-50 border border-red-100' : 'bg-orange-50 border border-orange-100'}`}>
                   <div>
-                    <p className="font-medium text-gray-800 text-sm">{v.conceptos?.nombre ?? '—'}</p>
+                    <p className="font-medium text-gray-800 text-sm">{v.descripcion ?? '—'}</p>
                     <p className="text-xs mt-0.5" style={{ color: v.personas?.color }}>{v.personas?.nombre}</p>
                   </div>
                   <div className="text-right">
