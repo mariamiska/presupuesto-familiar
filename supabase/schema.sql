@@ -13,7 +13,17 @@ create table if not exists personas (
   created_at timestamptz default now()
 );
 
--- Conceptos / categorías de gasto
+-- Categorías de gasto (fijas, predefinidas)
+create table if not exists categorias (
+  id     uuid primary key default gen_random_uuid(),
+  nombre text not null unique,
+  icono  text not null default '❓',
+  color  text not null default '#9ca3af',
+  orden  int  not null default 99,
+  created_at timestamptz default now()
+);
+
+-- Conceptos / nombres de gasto (legacy — se migra a gastos.descripcion)
 create table if not exists conceptos (
   id uuid primary key default gen_random_uuid(),
   nombre text not null,
@@ -41,7 +51,8 @@ create table if not exists presupuesto (
   id uuid primary key default gen_random_uuid(),
   mes int not null check (mes between 1 and 12),
   anio int not null default 2026,
-  concepto_id uuid references conceptos(id),
+  categoria_id uuid references categorias(id),   -- nuevo pivote por categoría
+  concepto_id uuid references conceptos(id),     -- legacy
   monto_planificado numeric(15,0) not null default 0,
   notas text,
   created_at timestamptz default now()
@@ -51,7 +62,9 @@ create table if not exists presupuesto (
 create table if not exists gastos (
   id uuid primary key default gen_random_uuid(),
   fecha date not null,
-  concepto_id uuid references conceptos(id),
+  descripcion text,                              -- nombre libre del gasto ("Netflix", "YDE Agosto")
+  categoria_id uuid references categorias(id),   -- categoría predefinida
+  concepto_id uuid references conceptos(id),     -- legacy, se eliminará en próxima migración
   persona_id uuid references personas(id),
   monto numeric(15,0) not null,
   nota text,
@@ -89,6 +102,22 @@ create table if not exists deudas (
   created_at timestamptz default now()
 );
 
+-- ── Seed categorias ───────────────────────────────────────
+insert into categorias (nombre, icono, color, orden) values
+  ('Alimentación',    '🍎', '#22c55e', 1),
+  ('Vivienda',        '🏠', '#f97316', 2),
+  ('Transporte',      '🚗', '#3b82f6', 3),
+  ('Servicios',       '📱', '#eab308', 4),
+  ('Salud',           '🏥', '#ef4444', 5),
+  ('Escuela',         '🏫', '#8b5cf6', 6),
+  ('Fútbol Niños',    '⚽', '#10b981', 7),
+  ('Entretenimiento', '🎭', '#ec4899', 8),
+  ('Ropa',            '👕', '#06b6d4', 9),
+  ('Deudas',          '💳', '#64748b', 10),
+  ('Regalos',         '🎁', '#f59e0b', 11),
+  ('Otro',            '❓', '#9ca3af', 12)
+on conflict (nombre) do nothing;
+
 -- ── Seed de personas ──────────────────────────────────────
 insert into personas (nombre, color, tipo) values
   ('Augusto', '#2980B9', 'Persona'),
@@ -99,13 +128,15 @@ insert into personas (nombre, color, tipo) values
 on conflict (nombre) do nothing;
 
 -- ── Indexes ───────────────────────────────────────────────
-create index if not exists idx_gastos_fecha on gastos(fecha);
-create index if not exists idx_gastos_persona on gastos(persona_id);
+create index if not exists idx_gastos_fecha      on gastos(fecha);
+create index if not exists idx_gastos_persona    on gastos(persona_id);
+create index if not exists idx_gastos_categoria  on gastos(categoria_id);
 create index if not exists idx_presupuesto_mes_anio on presupuesto(mes, anio);
 create index if not exists idx_ingresos_mes_anio on ingresos(mes, anio);
 
 -- ── RLS básico (habilitar en Supabase Dashboard también) ──
 alter table personas   enable row level security;
+alter table categorias enable row level security;
 alter table conceptos  enable row level security;
 alter table ingresos   enable row level security;
 alter table presupuesto enable row level security;
@@ -115,6 +146,8 @@ alter table deudas     enable row level security;
 
 -- Política permisiva para usuarios autenticados (familia comparte todo)
 create policy "familia_lee_todo" on personas   for select using (auth.role() = 'authenticated');
+create policy "familia_lee_todo" on categorias for select using (auth.role() = 'authenticated');
+create policy "familia_escribe"  on categorias for all    using (auth.role() = 'authenticated');
 create policy "familia_lee_todo" on conceptos  for select using (auth.role() = 'authenticated');
 create policy "familia_lee_todo" on ingresos   for select using (auth.role() = 'authenticated');
 create policy "familia_lee_todo" on presupuesto for select using (auth.role() = 'authenticated');
@@ -133,3 +166,7 @@ create policy "familia_escribe" on presupuesto for all using (auth.role() = 'aut
 -- Ejecutar en Supabase Dashboard → SQL Editor
 alter table gastos add column if not exists tipo_recurrencia text check (tipo_recurrencia in ('suscripcion', 'fijo'));
 create index if not exists idx_gastos_tipo_recurrencia on gastos(tipo_recurrencia) where tipo_recurrencia is not null;
+
+-- Migración: grupo de suscripciones (agrupar gastos del mismo ciclo anual)
+alter table gastos add column if not exists suscripcion_id uuid;
+create index if not exists idx_gastos_suscripcion on gastos(suscripcion_id) where suscripcion_id is not null;
