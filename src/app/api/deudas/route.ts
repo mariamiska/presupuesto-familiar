@@ -31,10 +31,10 @@ export async function GET() {
     })
     .map(g => ({
       id: `gasto-${g.concepto_id}`,
-      nombre: (g.conceptos as { nombre: string } | null)?.nombre ?? '—',
+      nombre: (g.conceptos as unknown as { nombre: string } | null)?.nombre ?? '—',
       tipo: 'prestamo' as const,
       persona_id: g.persona_id,
-      personas: g.personas as { nombre: string; color: string } | null,
+      personas: g.personas as unknown as { nombre: string; color: string } | null,
       saldo_actual: g.monto * ((g.cuotas_total ?? 0) - (g.cuota_actual ?? 0)),
       cuota_mensual: g.monto,
       cuotas_totales: g.cuotas_total,
