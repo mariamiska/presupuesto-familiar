@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { TrendingUp, TrendingDown, Minus, AlertCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, AlertCircle, Bell } from 'lucide-react'
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
 
@@ -29,15 +29,25 @@ export default async function Dashboard() {
   const fechaInicio = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-01`
   const fechaFin = `${ANIO_ACTUAL}-${String(MES_ACTUAL).padStart(2,'0')}-31`
 
-  const { data: gastosData, error: gastosError } = await db
+  const { data: gastosData } = await db
     .from('gastos')
     .select('monto, persona_id, personas(nombre, color)')
     .gte('fecha', fechaInicio)
     .lte('fecha', fechaFin)
 
-  console.log('DEBUG gastos query:', { fechaInicio, fechaFin, count: gastosData?.length, error: gastosError?.message })
-
   const gastMes = gastosData?.reduce((s, r) => s + r.monto, 0) ?? 0
+
+  // Próximos vencimientos (hoy + 15 días)
+  const hoy = new Date()
+  const en15 = new Date(hoy); en15.setDate(hoy.getDate() + 15)
+  const fmtDate = (d: Date) => d.toISOString().split('T')[0]
+  const { data: vencimientos } = await db
+    .from('gastos')
+    .select('id, fecha_vencimiento, monto, conceptos(nombre), personas(nombre, color)')
+    .gte('fecha_vencimiento', fmtDate(hoy))
+    .lte('fecha_vencimiento', fmtDate(en15))
+    .order('fecha_vencimiento', { ascending: true })
+    .limit(10)
 
   // Personas para el resumen
   const { data: personasData } = await db
@@ -97,16 +107,16 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">{MESES[mesIdx]} {ANIO_ACTUAL}</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800">{MESES[mesIdx]} {ANIO_ACTUAL}</h2>
           <p className="text-sm text-gray-500 mt-1">Resumen del mes actual</p>
         </div>
         {!sinDatos && (
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold shrink-0
             ${pct >= 5 ? 'bg-emerald-100 text-emerald-800' : pct >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
-            {pct >= 5 ? <TrendingUp size={16}/> : pct >= 0 ? <Minus size={16}/> : <TrendingDown size={16}/>}
-            {semaforo.label} · {pct.toFixed(1)}%
+            {pct >= 5 ? <TrendingUp size={14}/> : pct >= 0 ? <Minus size={14}/> : <TrendingDown size={14}/>}
+            <span className="hidden sm:inline">{semaforo.label} · </span>{pct.toFixed(1)}%
           </div>
         )}
       </div>
@@ -123,7 +133,7 @@ export default async function Dashboard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
             <Card label="Ingresos del mes" value={formatGsCompleto(ingMes)} color="text-emerald-600" />
             <Card label="Gastos del mes"   value={formatGsCompleto(gastMes)} color="text-red-600" />
             <Card
@@ -193,6 +203,45 @@ export default async function Dashboard() {
         </div>
       )}
 
+      {/* Próximos vencimientos */}
+      {vencimientos && vencimientos.length > 0 && (
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-orange-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Bell size={16} className="text-orange-500"/>
+            <h3 className="font-semibold text-gray-700">Vencimientos próximos <span className="text-xs text-gray-400 font-normal">(próximos 15 días)</span></h3>
+          </div>
+          <div className="space-y-2">
+            {vencimientos.map((v: {
+              id: string
+              fecha_vencimiento: string
+              monto: number
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              conceptos: any
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              personas: any
+            }) => {
+              const venc = new Date(v.fecha_vencimiento + 'T12:00:00')
+              const diasRestantes = Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
+              const urgente = diasRestantes <= 3
+              return (
+                <div key={v.id} className={`flex items-center justify-between rounded-lg px-4 py-3.5 ${urgente ? 'bg-red-50 border border-red-100' : 'bg-orange-50 border border-orange-100'}`}>
+                  <div>
+                    <p className="font-medium text-gray-800 text-sm">{v.conceptos?.nombre ?? '—'}</p>
+                    <p className="text-xs mt-0.5" style={{ color: v.personas?.color }}>{v.personas?.nombre}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-gray-800 text-sm">{formatGs(v.monto)}</p>
+                    <p className={`text-xs font-semibold mt-0.5 ${urgente ? 'text-red-600' : 'text-orange-600'}`}>
+                      {diasRestantes === 0 ? '¡Vence hoy!' : diasRestantes === 1 ? 'Vence mañana' : `${diasRestantes} días`}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Gráfico anual */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-700 mb-4">Ingresos vs Gastos — {ANIO_ACTUAL}</h3>
@@ -211,9 +260,9 @@ function Card({ label, value, color, sub }: {
   label: string; value: string; color: string; sub?: string
 }) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+    <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm border border-gray-100">
       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-xl font-bold ${color}`}>{value}</p>
+      <p className={`text-lg md:text-xl font-bold ${color} leading-tight`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   )

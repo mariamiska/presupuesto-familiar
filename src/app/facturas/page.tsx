@@ -36,28 +36,18 @@ export default function FacturasPage() {
   const [fecha, setFecha] = useState('')
   const [nota, setNota] = useState('')
 
-  function handleFile(file: File) {
+  async function handleFile(file: File) {
     setImagen(file)
     setOcr(null)
     setError(null)
     setGuardado(false)
     const url = URL.createObjectURL(file)
     setPreview(url)
-  }
-
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
-  }
-
-  async function procesarOcr() {
-    if (!imagen) return
+    // Arrancar OCR automáticamente
     setCargando(true)
-    setError(null)
     try {
       const form = new FormData()
-      form.append('file', imagen)
+      form.append('file', file)
       const res = await fetch('/api/ocr', { method: 'POST', body: form })
       if (!res.ok) throw new Error('Error procesando imagen')
       const data: OcrResult = await res.json()
@@ -72,6 +62,12 @@ export default function FacturasPage() {
     } finally {
       setCargando(false)
     }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file)
   }
 
   async function guardarGasto() {
@@ -128,14 +124,6 @@ export default function FacturasPage() {
                 <FileImage size={16} className="text-blue-500"/>
                 <span className="text-sm font-medium text-gray-700 truncate">{imagen.name}</span>
               </div>
-              {!ocr && !cargando && (
-                <button
-                  onClick={procesarOcr}
-                  className="bg-[#2C3E50] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#34495E] transition-colors"
-                >
-                  Analizar con Claude Haiku
-                </button>
-              )}
               {cargando && (
                 <div className="flex items-center gap-2 text-blue-600 text-sm">
                   <Loader2 className="animate-spin" size={16}/>
