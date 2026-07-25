@@ -3,10 +3,11 @@ import { useState, useRef } from 'react'
 import { FileSpreadsheet, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
 
 type ImportResult = {
-  conceptos: number
-  presupuesto: number
-  gastos_reales: number
+  ok: boolean
   ingresos: number
+  presupuesto: number
+  gastos: number
+  conceptos: number
 }
 
 export default function ImportarPage() {
@@ -96,10 +97,10 @@ export default function ImportarPage() {
             <CheckCircle size={24}/> Importación completada
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat label="Conceptos" value={resultado.conceptos}/>
+            <Stat label="Registros de ingresos" value={resultado.ingresos}/>
             <Stat label="Filas de presupuesto" value={resultado.presupuesto}/>
-            <Stat label="Gastos reales" value={resultado.gastos_reales}/>
-            <Stat label="Ingresos" value={resultado.ingresos}/>
+            <Stat label="Gastos reales" value={resultado.gastos}/>
+            <Stat label="Conceptos nuevos" value={resultado.conceptos}/>
           </div>
           <a href="/" className="block text-center text-emerald-700 underline text-sm">
             Ver dashboard →
