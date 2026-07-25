@@ -146,7 +146,11 @@ export async function POST(req: NextRequest) {
       const conceptoId = conceptoMap[`${personaId}:${conceptoNombre.toLowerCase().trim()}`]
       if (conceptoId) {
         const fecha = `${ANIO}-${String(mes).padStart(2,'0')}-15`
-        gastInserts.push({ fecha, concepto_id: conceptoId, persona_id: personaId, monto, nota, fuente: 'importar', pendiente_confirmacion: false })
+        const cuotaStr = String(row['Cuota'] ?? '').trim()
+        const cuotaMatch = cuotaStr.match(/^(\d+)\/(\d+)$/)
+        const cuota_actual = cuotaMatch ? parseInt(cuotaMatch[1]) : null
+        const cuotas_total = cuotaMatch ? parseInt(cuotaMatch[2]) : null
+        gastInserts.push({ fecha, concepto_id: conceptoId, persona_id: personaId, monto, nota, fuente: 'importar', pendiente_confirmacion: false, cuota_actual, cuotas_total })
       }
     }
 

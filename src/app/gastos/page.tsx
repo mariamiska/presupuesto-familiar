@@ -19,6 +19,8 @@ type Gasto = {
   monto: number
   nota?: string
   fuente: string
+  cuota_actual?: number
+  cuotas_total?: number
   personas?: { nombre: string; color: string }
   conceptos?: { nombre: string }
 }
@@ -196,6 +198,11 @@ export default function GastosPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-800">{g.conceptos?.nombre ?? '—'}</span>
+                    {g.cuota_actual && g.cuotas_total && (
+                      <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-medium">
+                        {g.cuota_actual}/{g.cuotas_total}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400">{FUENTE_LABEL[g.fuente] ?? ''}</span>
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
