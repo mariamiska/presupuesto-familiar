@@ -55,11 +55,14 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center gap-0.5 px-2 py-3 min-w-0 flex-1 transition-colors
-                ${active ? 'text-white' : 'text-white/50'}`}
+              className={`flex flex-col items-center gap-1 px-2 py-2.5 min-w-0 flex-1 transition-all relative
+                ${active ? 'text-white' : 'text-white/45'}`}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
-              <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+              {active && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />
+              )}
+              <Icon size={21} strokeWidth={active ? 2.5 : 1.75} />
+              <span className={`text-[10px] leading-none truncate ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
             </Link>
           )
         })}

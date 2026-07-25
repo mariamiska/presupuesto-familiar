@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
-import { TrendingUp, TrendingDown, Minus, AlertCircle, Bell } from 'lucide-react'
+import React from 'react'
+import { TrendingUp, TrendingDown, Minus, AlertCircle, Bell, ArrowDownCircle, ArrowUpCircle, Wallet } from 'lucide-react'
 import { supabaseAdmin, MESES, formatGs, formatGsCompleto } from '@/lib/supabase'
 import { BarChart } from '@/components/BarChart'
 
@@ -134,20 +135,21 @@ export default async function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-            <Card label="Ingresos del mes" value={formatGsCompleto(ingMes)} color="text-emerald-600" />
-            <Card label="Gastos del mes"   value={formatGsCompleto(gastMes)} color="text-red-600" />
+            <Card label="Ingresos del mes" value={formatGsCompleto(ingMes)} color="text-emerald-600" icon={<ArrowDownCircle size={18} className="text-emerald-500"/>} />
+            <Card label="Gastos del mes"   value={formatGsCompleto(gastMes)} color="text-red-500" icon={<ArrowUpCircle size={18} className="text-red-400"/>} />
             <Card
               label="Balance / Ahorro"
               value={formatGsCompleto(balance)}
               color={balance >= 0 ? 'text-emerald-600' : 'text-red-600'}
+              icon={<Wallet size={18} className={balance >= 0 ? 'text-emerald-500' : 'text-red-400'}/>}
               sub={`Meta 5%: ${formatGsCompleto(ingMes * 0.05)}`}
             />
           </div>
 
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="font-semibold text-gray-700">Progreso de ahorro mensual</span>
-              <span className={`font-bold ${semaforo.text}`}>{pct.toFixed(1)}% / meta 5%</span>
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <span className="font-semibold text-gray-700 text-sm">Progreso de ahorro</span>
+              <span className={`font-bold text-sm shrink-0 ${semaforo.text}`}>{pct.toFixed(1)}% / meta 5%</span>
             </div>
             <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
               <div
@@ -256,13 +258,16 @@ export default async function Dashboard() {
   )
 }
 
-function Card({ label, value, color, sub }: {
-  label: string; value: string; color: string; sub?: string
+function Card({ label, value, color, sub, icon }: {
+  label: string; value: string; color: string; sub?: string; icon?: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm border border-gray-100">
-      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-lg md:text-xl font-bold ${color} leading-tight`}>{value}</p>
+    <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">{label}</p>
+        {icon}
+      </div>
+      <p className={`text-xl md:text-2xl font-bold ${color} leading-tight`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   )

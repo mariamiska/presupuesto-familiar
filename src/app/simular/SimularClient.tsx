@@ -50,30 +50,43 @@ export default function SimularClient({ ingMes, gastMes, mesActual }: Props) {
         </div>
       )}
 
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 space-y-4">
+      {/* Balance actual visible antes de simular */}
+      {ingMes > 0 && !resultado && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Balance disponible ahora</span>
+            <span className={`font-bold text-base ${ingMes - gastMes >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {formatGsCompleto(ingMes - gastMes)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Monto (₲)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">¿Cuánto querés gastar? (₲)</label>
           <input
-            type="text"
+            type="number"
+            inputMode="numeric"
             placeholder="ej: 500000"
             value={monto}
             onChange={e => setMonto(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Persona</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Persona (opcional)</label>
             <select value={persona} onChange={e => setPersona(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300">
-              <option value="">Seleccioná</option>
+              className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">Todas</option>
               {PERSONAS.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Categoría (opcional)</label>
             <select value={concepto} onChange={e => setConcepto(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300">
+              className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
               <option value="">Seleccioná</option>
               {CONCEPTOS.map(c => <option key={c}>{c}</option>)}
             </select>
@@ -81,44 +94,55 @@ export default function SimularClient({ ingMes, gastMes, mesActual }: Props) {
         </div>
         <button
           onClick={handleSimular}
-          className="w-full bg-[#2C3E50] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[#34495E] transition-colors"
+          className="w-full bg-[#2C3E50] text-white py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2 hover:bg-[#34495E] transition-colors active:scale-[0.98]"
         >
-          <Calculator size={18}/> Simular gasto
+          <Calculator size={18}/> ¿Puedo gastarlo?
         </button>
       </div>
 
       {resultado && (
-        <div className={`rounded-xl p-6 border-2 space-y-4
-          ${resultado.metaCumplida ? 'bg-emerald-50 border-emerald-200' : resultado.enDeuda ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-          <div className="flex items-center gap-3">
+        <div className={`rounded-2xl border-2 overflow-hidden
+          ${resultado.metaCumplida ? 'border-emerald-200' : resultado.enDeuda ? 'border-red-200' : 'border-amber-200'}`}>
+          {/* Header con veredicto */}
+          <div className={`px-5 py-4 flex items-center gap-3
+            ${resultado.metaCumplida ? 'bg-emerald-500' : resultado.enDeuda ? 'bg-red-500' : 'bg-amber-400'}`}>
             {resultado.metaCumplida
-              ? <CheckCircle className="text-emerald-600" size={28}/>
+              ? <CheckCircle className="text-white shrink-0" size={26}/>
               : resultado.enDeuda
-              ? <XCircle className="text-red-600" size={28}/>
-              : <AlertTriangle className="text-amber-600" size={28}/>}
-            <div>
-              <p className="font-bold text-lg">
-                {resultado.metaCumplida ? '✓ Podés gastarlo sin problema'
-                  : resultado.enDeuda ? '✗ Te va a dejar en déficit'
-                  : '⚠ Podés, pero perdés la meta del 5%'}
-              </p>
-              <p className="text-sm text-gray-600">{MESES[mesActual - 1]} · Ingresos: {formatGsCompleto(ingMes)}</p>
-            </div>
+              ? <XCircle className="text-white shrink-0" size={26}/>
+              : <AlertTriangle className="text-white shrink-0" size={26}/>}
+            <p className="font-bold text-white text-base leading-tight">
+              {resultado.metaCumplida ? 'Podés gastarlo sin problema'
+                : resultado.enDeuda ? 'Te va a dejar en déficit'
+                : 'Podés, pero perdés la meta del 5%'}
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat label="Balance actual" value={formatGsCompleto(resultado.balanceActual)} />
-            <Stat label="Balance después" value={formatGsCompleto(resultado.balanceNuevo)} highlight={resultado.enDeuda} />
-            <Stat label="Ahorro actual" value={`${resultado.pctActual.toFixed(1)}%`} />
-            <Stat label="Ahorro después" value={`${resultado.pctNuevo.toFixed(1)}%`} highlight={resultado.pctNuevo < 5} />
-          </div>
-          {!resultado.metaCumplida && (
-            <div className="bg-white/70 rounded-lg p-4 text-sm space-y-1">
-              <p className="font-semibold text-gray-700">Alternativas:</p>
-              <p>• Dividir en 3 cuotas de {formatGsCompleto(resultado.cuotaEquiv)}/mes</p>
-              <p>• Esperar al mes que viene si el balance mejora</p>
-              {resultado.enDeuda && <p>• Reducir otro gasto este mes primero</p>}
+
+          {/* Stats */}
+          <div className={`p-4 space-y-3 ${resultado.metaCumplida ? 'bg-emerald-50' : resultado.enDeuda ? 'bg-red-50' : 'bg-amber-50'}`}>
+            <div className="grid grid-cols-2 gap-3">
+              <Stat label="Balance actual" value={formatGsCompleto(resultado.balanceActual)} />
+              <Stat label="Balance después" value={formatGsCompleto(resultado.balanceNuevo)} highlight={resultado.enDeuda} />
+              <Stat label="Ahorro actual" value={`${resultado.pctActual.toFixed(1)}%`} />
+              <Stat label="Ahorro después" value={`${resultado.pctNuevo.toFixed(1)}%`} highlight={resultado.pctNuevo < 5} />
             </div>
-          )}
+
+            {!resultado.metaCumplida && (
+              <div className="bg-white/80 rounded-xl p-4 space-y-1.5 text-sm">
+                <p className="font-semibold text-gray-700 mb-2">Alternativas</p>
+                <p className="text-gray-600">• Dividir en 3 cuotas de <strong>{formatGsCompleto(resultado.cuotaEquiv)}/mes</strong></p>
+                <p className="text-gray-600">• Esperar al mes que viene si el balance mejora</p>
+                {resultado.enDeuda && <p className="text-gray-600">• Reducir otro gasto este mes primero</p>}
+              </div>
+            )}
+
+            <button
+              onClick={() => setResultado(null)}
+              className="w-full text-center text-sm text-gray-400 hover:text-gray-600 py-1"
+            >
+              Simular otro monto
+            </button>
+          </div>
         </div>
       )}
     </div>
