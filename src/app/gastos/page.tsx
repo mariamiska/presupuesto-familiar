@@ -10,6 +10,8 @@ const FUENTE_LABEL: Record<string, string> = { manual: '✏️', ocr: '📷', wh
 
 type TipoRecurrencia = 'suscripcion' | 'fijo' | null
 
+type TarjetaSimple = { id: string; nombre: string; banco: string }
+
 type Gasto = {
   id: string
   fecha: string
@@ -22,8 +24,10 @@ type Gasto = {
   fecha_vencimiento?: string
   tipo_recurrencia?: TipoRecurrencia
   suscripcion_id?: string
+  tarjeta_id?: string
   personas?: { nombre: string; color: string }
   categorias?: { nombre: string; color: string; icono: string }
+  tarjetas?: TarjetaSimple
 }
 
 const RECURRENCIA_BADGE: Record<string, { label: string; cls: string }> = {
@@ -37,6 +41,7 @@ const anioActual = new Date().getFullYear()
 export default function GastosPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [tarjetas, setTarjetas] = useState<TarjetaSimple[]>([])
 
   const [showForm, setShowForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -44,6 +49,7 @@ export default function GastosPage() {
   const [persona, setPersona] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
+  const [tarjetaId, setTarjetaId] = useState('')
   const [monto, setMonto] = useState('')
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
@@ -62,6 +68,7 @@ export default function GastosPage() {
   const [editPersona, setEditPersona] = useState('')
   const [editDescripcion, setEditDescripcion] = useState('')
   const [editCategoriaId, setEditCategoriaId] = useState('')
+  const [editTarjetaId, setEditTarjetaId] = useState('')
   const [editFecha, setEditFecha] = useState('')
   const [editNota, setEditNota] = useState('')
   const [editCuotaActual, setEditCuotaActual] = useState('')
@@ -79,6 +86,9 @@ export default function GastosPage() {
     fetch('/api/categorias').then(r => r.json()).then(data => {
       if (Array.isArray(data)) setCategorias(data)
     })
+    fetch('/api/tarjetas').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setTarjetas(data)
+    })
   }, [])
 
   const cargarGastos = useCallback(async () => {
@@ -93,7 +103,7 @@ export default function GastosPage() {
 
   function resetForm() {
     setMonto(''); setNota(''); setPersona('')
-    setDescripcion(''); setCategoriaId(''); setTipoRecurrencia(null)
+    setDescripcion(''); setCategoriaId(''); setTarjetaId(''); setTipoRecurrencia(null)
   }
 
   async function guardar() {
@@ -104,7 +114,7 @@ export default function GastosPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId,
+        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId, tarjeta_id: tarjetaId || null,
         monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
       }),
     })
@@ -122,6 +132,7 @@ export default function GastosPage() {
     setEditPersona(g.personas?.nombre ?? '')
     setEditDescripcion(g.descripcion ?? '')
     setEditCategoriaId(g.categorias ? categorias.find(c => c.nombre === g.categorias!.nombre)?.id ?? '' : '')
+    setEditTarjetaId(g.tarjeta_id ?? '')
     setEditFecha(g.fecha)
     setEditNota(g.nota ?? '')
     setEditCuotaActual(g.cuota_actual ? String(g.cuota_actual) : '')
@@ -144,7 +155,7 @@ export default function GastosPage() {
       || editFecha !== gastoEditando.fecha
       || editNota !== (gastoEditando.nota ?? '')
 
-    if (cambiosPrincipales) {
+    if (cambiosPrincipales || editTarjetaId !== (gastoEditando.tarjeta_id ?? '')) {
       await fetch(`/api/gastos/${gastoEditando.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -152,6 +163,7 @@ export default function GastosPage() {
           persona_nombre: editPersona,
           descripcion: editDescripcion,
           categoria_id: editCategoriaId,
+          tarjeta_id: editTarjetaId || null,
           monto: montoNum,
           fecha: editFecha,
           nota: editNota,
@@ -318,10 +330,12 @@ export default function GastosPage() {
                   className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
-                <input type="text" value={nota} onChange={e => setNota(e.target.value)}
-                  placeholder="Descripción breve"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tarjeta de Crédito (opcional)</label>
+                <select value={tarjetaId} onChange={e => setTarjetaId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="">Ninguna / Efectivo</option>
+                  {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}</option>)}
+                </select>
               </div>
             </div>
 
@@ -475,6 +489,11 @@ export default function GastosPage() {
                         {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
                       </span>
                     )}
+                    {g.tarjetas?.nombre && (
+                      <span className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                        💳 {g.tarjetas.nombre}
+                      </span>
+                    )}
                     {g.cuota_actual && g.cuotas_total && (
                       <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-medium">
                         cuota {g.cuota_actual}/{g.cuotas_total}
@@ -556,9 +575,12 @@ export default function GastosPage() {
                       className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Nota</label>
-                    <input type="text" value={editNota} onChange={e => setEditNota(e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Tarjeta de Crédito</label>
+                    <select value={editTarjetaId} onChange={e => setEditTarjetaId(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                      <option value="">Ninguna / Efectivo</option>
+                      {tarjetas.map(t => <option key={t.id} value={t.id}>{t.banco} - {t.nombre}</option>)}
+                    </select>
                   </div>
                 </div>
               </div>

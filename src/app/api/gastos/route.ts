@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const db = supabaseAdmin()
   let query = db
     .from('gastos')
-    .select('*, personas(nombre, color), categorias(nombre, color, icono)')
+    .select('*, personas(nombre, color), categorias(nombre, color, icono), tarjetas(id, nombre, banco)')
     .order('fecha', { ascending: false })
 
   if (recurrentes === '1') {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { fecha, persona_nombre, descripcion, categoria_id, monto, nota, fuente = 'manual', tipo_recurrencia } = body
+    const { fecha, persona_nombre, descripcion, categoria_id, tarjeta_id, monto, nota, fuente = 'manual', tipo_recurrencia } = body
 
     const db = supabaseAdmin()
 
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
         persona_id: persona.id,
         descripcion: descripcion ?? '',
         categoria_id,
+        tarjeta_id: tarjeta_id || null,
         monto: montoNum,
         nota: nota ?? '',
         fuente,
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
         fecha: fechaBase,
         descripcion: descripcion ?? '',
         categoria_id,
+        tarjeta_id: tarjeta_id || null,
         persona_id: persona.id,
         monto: montoNum,
         nota: nota ?? '',
@@ -88,12 +90,13 @@ export async function POST(req: NextRequest) {
 }
 
 function crearGastosRecurrentes({
-  fechaBase, persona_id, descripcion, categoria_id, monto, nota, fuente, tipo_recurrencia,
+  fechaBase, persona_id, descripcion, categoria_id, tarjeta_id, monto, nota, fuente, tipo_recurrencia,
 }: {
   fechaBase: string
   persona_id: string
   descripcion: string
   categoria_id: string
+  tarjeta_id?: string | null
   monto: number
   nota: string
   fuente: string
@@ -106,6 +109,7 @@ function crearGastosRecurrentes({
     fecha: `${anio}-${String(mesInicio + i).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
     descripcion,
     categoria_id,
+    tarjeta_id: tarjeta_id || null,
     persona_id,
     monto,
     nota,

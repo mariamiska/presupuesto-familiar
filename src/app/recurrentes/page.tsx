@@ -13,6 +13,7 @@ type Gasto = {
   tipo_recurrencia: 'suscripcion' | 'fijo'
   personas?: { nombre: string; color: string }
   categorias?: { nombre: string; icono: string; color: string }
+  tarjetas?: { id: string; nombre: string; banco: string }
 }
 
 type Seccion = {
@@ -140,9 +141,14 @@ export default function RecurrentesPage() {
                         {g.categorias?.icono && <span className="mr-1">{g.categorias.icono}</span>}
                         {g.descripcion ?? '—'}
                       </p>
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
                           {g.nota && ` · ${g.nota}`}
+                          {g.tarjetas?.nombre && (
+                            <span className="text-[11px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-medium">
+                              💳 {g.tarjetas.nombre}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="text-right">

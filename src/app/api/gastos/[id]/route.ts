@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json()
-    const { persona_nombre, descripcion, categoria_id, monto, fecha, nota } = body
+    const { persona_nombre, descripcion, categoria_id, tarjeta_id, monto, fecha, nota } = body
     const db = supabaseAdmin()
 
     const { data: persona } = await db
@@ -120,9 +120,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const { data, error } = await db
       .from('gastos')
-      .update({ persona_id: persona.id, descripcion, categoria_id, monto: parseInt(monto), fecha, nota: nota ?? '' })
+      .update({ persona_id: persona.id, descripcion, categoria_id, tarjeta_id: tarjeta_id || null, monto: parseInt(monto), fecha, nota: nota ?? '' })
       .eq('id', params.id)
-      .select('*, personas(nombre, color), categorias(nombre, color, icono)')
+      .select('*, personas(nombre, color), categorias(nombre, color, icono), tarjetas(id, nombre, banco)')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)

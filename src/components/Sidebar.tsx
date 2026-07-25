@@ -3,13 +3,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PlusCircle, Calculator, TrendingDown,
-  FileText, Upload, BarChart2, Repeat2
+  FileText, Upload, BarChart2, Repeat2, CreditCard
 } from 'lucide-react'
 
 const nav = [
   { href: '/',             label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/gastos',       label: 'Gastos',         icon: PlusCircle },
   { href: '/recurrentes',  label: 'Recurrentes',    icon: Repeat2 },
+  { href: '/tarjetas',     label: 'Tarjetas',       icon: CreditCard },
   { href: '/facturas',     label: 'Factura',        icon: Upload },
   { href: '/simular',      label: 'Simular',        icon: Calculator },
   { href: '/deudas',       label: 'Deudas',         icon: TrendingDown },

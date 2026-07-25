@@ -195,8 +195,9 @@ begin
   select id into id_ninos from conceptos where lower(nombre) = 'seguro niños' limit 1;
 
   if id_nino is not null and id_ninos is not null then
-    -- reasignar gastos al concepto correcto
-    update gastos set concepto_id = id_ninos where concepto_id = id_nino;
+    -- reasignar gastos y presupuesto al concepto correcto
+    update gastos      set concepto_id = id_ninos where concepto_id = id_nino;
+    update presupuesto set concepto_id = id_ninos where concepto_id = id_nino;
     delete from conceptos where id = id_nino;
   elsif id_nino is not null then
     -- solo existe el viejo, renombrar

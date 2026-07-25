@@ -77,6 +77,17 @@ export type Deuda = {
   activa: boolean
 }
 
+export type Tarjeta = {
+  id: string
+  nombre: string
+  banco: string
+  persona_id?: string
+  limite: number
+  deuda_actual: number
+  activa: boolean
+  personas?: { nombre: string; color: string }
+}
+
 export const MESES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre'
