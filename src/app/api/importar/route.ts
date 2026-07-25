@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       const conceptoId = conceptoMap[`${personaId}:${conceptoNombre.toLowerCase().trim()}`]
       if (conceptoId) {
         const fecha = `${ANIO}-${String(mes).padStart(2,'0')}-15`
-        gastInserts.push({ fecha, concepto_id: conceptoId, persona_id: personaId, monto, nota, fuente: 'datos', pendiente_confirmacion: false })
+        gastInserts.push({ fecha, concepto_id: conceptoId, persona_id: personaId, monto, nota, fuente: 'importar', pendiente_confirmacion: false })
       }
     }
 
