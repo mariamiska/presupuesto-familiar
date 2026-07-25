@@ -130,19 +130,19 @@ export default function TarjetasPage() {
       {/* Tarjetas resumen superior */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Crédito Disponible Total</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{formatGsCompleto(Math.max(0, totalLimitesCards - totalDeudasCards))}</p>
+          <p className="text-xs text-gray-400 mt-1">Límite menos deudas de todas las tarjetas</p>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Deuda Acumulada</p>
           <p className="text-2xl font-bold text-red-600 mt-1">{formatGsCompleto(totalDeudasCards)}</p>
-          <p className="text-xs text-gray-400 mt-1">Suma de saldos de todas las tarjetas</p>
+          <p className="text-xs text-gray-400 mt-1">Suma de saldos deudores de todas las tarjetas</p>
         </div>
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Límite Total de Crédito</p>
           <p className="text-2xl font-bold text-blue-900 mt-1">{formatGsCompleto(totalLimitesCards)}</p>
-          <p className="text-xs text-gray-400 mt-1">Cupo máximo otorgado por bancos</p>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tarjetas Registradas</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{tarjetas.length}</p>
-          <p className="text-xs text-gray-400 mt-1">Activas en el sistema</p>
+          <p className="text-xs text-gray-400 mt-1">Cupo total otorgado por bancos</p>
         </div>
       </div>
 
@@ -171,6 +171,7 @@ export default function TarjetasPage() {
             const gastosConTarjeta = gastosMes.filter(g => g.tarjeta_id === t.id)
             const montoMesActual = gastosConTarjeta.reduce((sum, g) => sum + g.monto, 0)
             const suscripcionesConTarjeta = gastosConTarjeta.filter(g => g.tipo_recurrencia === 'suscripcion' || g.tipo_recurrencia === 'fijo')
+            const disponible = (t.limite ?? 0) - (t.deuda_actual ?? 0)
 
             return (
               <div key={t.id} className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-md relative overflow-hidden flex flex-col justify-between space-y-6">
@@ -208,13 +209,17 @@ export default function TarjetasPage() {
                 </div>
 
                 {/* Card metrics */}
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/60 text-xs">
+                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-700/60 text-xs">
                   <div>
-                    <span className="text-slate-400 block mb-0.5">Saldo Deuda Actual</span>
+                    <span className="text-slate-400 block mb-0.5">Disponible</span>
+                    <span className="text-base font-bold text-emerald-400">{formatGsCompleto(disponible)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-0.5">Deuda Actual</span>
                     <span className="text-base font-bold text-amber-400">{formatGsCompleto(t.deuda_actual ?? 0)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block mb-0.5">Límite de Crédito</span>
+                    <span className="text-slate-400 block mb-0.5">Límite Crédito</span>
                     <span className="text-base font-semibold text-slate-200">{formatGsCompleto(t.limite ?? 0)}</span>
                   </div>
                 </div>
