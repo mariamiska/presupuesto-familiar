@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Loader2, Repeat2, Pin, Plus, ExternalLink } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Loader2, Repeat2, Pin, Plus, ExternalLink, Pencil, Check, X } from 'lucide-react'
 import { formatGsCompleto } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -14,6 +14,13 @@ type Gasto = {
   personas?: { nombre: string; color: string }
   categorias?: { nombre: string; icono: string; color: string }
   tarjetas?: { id: string; nombre: string; banco: string }
+}
+
+type Tarjeta = {
+  id: string
+  nombre: string
+  banco: string
+  personas?: { nombre: string; color: string }
 }
 
 type Seccion = {
@@ -47,12 +54,39 @@ const SECCIONES: Seccion[] = [
 export default function RecurrentesPage() {
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [cargando, setCargando] = useState(true)
+  const [tarjetas, setTarjetas] = useState<Tarjeta[]>([])
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [tarjetaSeleccionada, setTarjetaSeleccionada] = useState<string>('')
+  const [guardando, setGuardando] = useState(false)
+  const selectRef = useRef<HTMLSelectElement>(null)
 
   useEffect(() => {
     fetch('/api/gastos?recurrentes=1')
       .then(r => r.json())
       .then(data => { setGastos(Array.isArray(data) ? data : []); setCargando(false) })
+    fetch('/api/tarjetas')
+      .then(r => r.json())
+      .then(data => setTarjetas(Array.isArray(data) ? data : []))
   }, [])
+
+  function iniciarEdicion(g: Gasto) {
+    setEditandoId(g.id)
+    setTarjetaSeleccionada(g.tarjetas?.id ?? '')
+    setTimeout(() => selectRef.current?.focus(), 50)
+  }
+
+  async function guardarTarjeta(gastoId: string) {
+    setGuardando(true)
+    await fetch(`/api/gastos/${gastoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'actualizar_tarjeta', tarjeta_id: tarjetaSeleccionada || null }),
+    })
+    const data = await fetch('/api/gastos?recurrentes=1').then(r => r.json())
+    setGastos(Array.isArray(data) ? data : [])
+    setEditandoId(null)
+    setGuardando(false)
+  }
 
   // Agrupar por concepto+persona para obtener el último monto de cada recurrente
   function agrupar(tipo: 'suscripcion' | 'fijo') {
@@ -135,25 +169,70 @@ export default function RecurrentesPage() {
               ) : (
                 <div className="divide-y divide-gray-50">
                   {items.map(g => (
-                    <div key={g.id} className="px-4 py-3.5 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-gray-800 text-sm">
-                        {g.categorias?.icono && <span className="mr-1">{g.categorias.icono}</span>}
-                        {g.descripcion ?? '—'}
-                      </p>
-                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
-                          {g.nota && ` · ${g.nota}`}
-                          {g.tarjetas?.nombre && (
-                            <span className="text-[11px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-medium">
-                              💳 {g.tarjetas.nombre}
-                            </span>
-                          )}
-                        </p>
+                    <div key={g.id} className="px-4 py-3.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 text-sm">
+                            {g.categorias?.icono && <span className="mr-1">{g.categorias.icono}</span>}
+                            {g.descripcion ?? '—'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
+                            {g.nota && ` · ${g.nota}`}
+                          </p>
+                        </div>
+                        <div className="text-right ml-3 shrink-0">
+                          <p className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</p>
+                          <p className="text-xs text-gray-400">/ mes</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</p>
-                        <p className="text-xs text-gray-400">/ mes</p>
+
+                      {/* Fila de tarjeta editable */}
+                      <div className="mt-1.5 flex items-center gap-2">
+                        {editandoId === g.id ? (
+                          <>
+                            <select
+                              ref={selectRef}
+                              value={tarjetaSeleccionada}
+                              onChange={e => setTarjetaSeleccionada(e.target.value)}
+                              className="text-xs border border-blue-300 rounded px-2 py-1 bg-white text-gray-700 flex-1 max-w-[220px]"
+                            >
+                              <option value="">Sin tarjeta (efectivo)</option>
+                              {tarjetas.map(t => (
+                                <option key={t.id} value={t.id}>
+                                  💳 {t.nombre} – {t.banco} ({t.personas?.nombre})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => guardarTarjeta(g.id)}
+                              disabled={guardando}
+                              className="p-1 rounded text-green-600 hover:bg-green-50 disabled:opacity-50"
+                            >
+                              {guardando ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>}
+                            </button>
+                            <button
+                              onClick={() => setEditandoId(null)}
+                              className="p-1 rounded text-gray-400 hover:bg-gray-100"
+                            >
+                              <X size={13}/>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => iniciarEdicion(g)}
+                            className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-gray-700 group"
+                          >
+                            {g.tarjetas?.nombre ? (
+                              <span className="bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded font-medium group-hover:border-blue-200 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
+                                💳 {g.tarjetas.nombre} – {g.tarjetas.banco}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 group-hover:text-blue-500 transition-colors">+ tarjeta</span>
+                            )}
+                            <Pencil size={10} className="opacity-0 group-hover:opacity-100 transition-opacity"/>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

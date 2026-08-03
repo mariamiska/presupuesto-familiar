@@ -51,11 +51,13 @@ export default async function Dashboard() {
     db.from('ingresos').select('monto').eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
     db.from('gastos').select('monto, persona_id, personas(nombre, color)')
       .gte('fecha', primerDia(ANIO_ACTUAL, MES_ACTUAL))
-      .lte('fecha', ultimoDia(ANIO_ACTUAL, MES_ACTUAL)),
+      .lte('fecha', ultimoDia(ANIO_ACTUAL, MES_ACTUAL))
+      .not('excluir_resumen', 'is', true),
     db.from('ingresos').select('monto').eq('mes', MES_ANT).eq('anio', ANIO_ANT),
     db.from('gastos').select('monto')
       .gte('fecha', primerDia(ANIO_ANT, MES_ANT))
-      .lte('fecha', ultimoDia(ANIO_ANT, MES_ANT)),
+      .lte('fecha', ultimoDia(ANIO_ANT, MES_ANT))
+      .not('excluir_resumen', 'is', true),
     db.from('gastos')
       .select('id, fecha_vencimiento, monto, descripcion, personas(nombre, color)')
       .gte('fecha_vencimiento', new Date().toISOString().split('T')[0])
@@ -68,7 +70,8 @@ export default async function Dashboard() {
     db.from('ingresos').select('mes, monto').eq('anio', ANIO_ACTUAL),
     db.from('gastos').select('fecha, monto')
       .gte('fecha', `${ANIO_ACTUAL}-01-01`)
-      .lte('fecha', `${ANIO_ACTUAL}-12-31`),
+      .lte('fecha', `${ANIO_ACTUAL}-12-31`)
+      .not('excluir_resumen', 'is', true),
     db.from('deudas')
       .select('id, nombre, cuota_mensual, cuotas_totales, cuotas_pagadas, personas(nombre, color)')
       .eq('activa', true)

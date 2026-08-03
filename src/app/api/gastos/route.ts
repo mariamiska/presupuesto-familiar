@@ -65,6 +65,65 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(data[0])
     }
 
+    // Compra en cuotas con tarjeta → genera filas automáticas por mes
+    const cuotasNum = cuotas_total ? parseInt(cuotas_total) : 1
+    if (cuotasNum > 1 && tarjeta_id) {
+      const grupoId = crypto.randomUUID()
+      const montoCuota = Math.round(montoNum / cuotasNum)
+
+      // Origen: el total, no suma al resumen del mes
+      const { data: origen, error: errOrigen } = await db
+        .from('gastos')
+        .insert({
+          fecha: fechaBase,
+          descripcion: descripcion ?? '',
+          categoria_id,
+          tarjeta_id: tarjeta_id || null,
+          persona_id: persona.id,
+          monto: montoNum,
+          nota: nota ?? '',
+          fuente,
+          pendiente_confirmacion: false,
+          excluir_resumen: true,
+          cuotas_total: cuotasNum,
+          suscripcion_id: grupoId,
+        })
+        .select()
+        .single()
+
+      if (errOrigen) return NextResponse.json({ error: errOrigen.message }, { status: 500 })
+
+      // Cuotas: una por mes a partir del mes siguiente
+      const [anioBase, mesBase, diaBase] = fechaBase.split('-').map(Number)
+      const cuotas = Array.from({ length: cuotasNum }, (_, i) => {
+        const mesAbs = mesBase + i + 1
+        const anio = anioBase + Math.floor((mesAbs - 1) / 12)
+        const mes = ((mesAbs - 1) % 12) + 1
+        const ultimoDia = new Date(anio, mes, 0).getDate()
+        return {
+          fecha: `${anio}-${String(mes).padStart(2, '0')}-${String(Math.min(diaBase, ultimoDia)).padStart(2, '0')}`,
+          descripcion: descripcion ?? '',
+          categoria_id,
+          tarjeta_id: tarjeta_id || null,
+          persona_id: persona.id,
+          monto: montoCuota,
+          nota: nota ?? '',
+          fuente,
+          pendiente_confirmacion: false,
+          es_cuota: true,
+          cuota_num: i + 1,
+          cuotas_total: cuotasNum,
+          compra_origen_id: origen.id,
+          suscripcion_id: grupoId,
+        }
+      })
+
+      const { error: errCuotas } = await db.from('gastos').insert(cuotas)
+      if (errCuotas) return NextResponse.json({ error: errCuotas.message }, { status: 500 })
+
+      return NextResponse.json(origen)
+    }
+
     const { data, error } = await db
       .from('gastos')
       .insert({

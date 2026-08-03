@@ -21,6 +21,10 @@ type Gasto = {
   fuente: string
   cuota_actual?: number
   cuotas_total?: number
+  cuota_num?: number
+  compra_origen_id?: string
+  es_cuota?: boolean
+  excluir_resumen?: boolean
   fecha_vencimiento?: string
   tipo_recurrencia?: TipoRecurrencia
   suscripcion_id?: string
@@ -54,9 +58,7 @@ export default function GastosPage() {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [nota, setNota] = useState('')
   const [tipoRecurrencia, setTipoRecurrencia] = useState<TipoRecurrencia>(null)
-  const [esDeuda, setEsDeuda] = useState(false)
-  const [cuotaActual, setCuotaActual] = useState('')
-  const [cuotasTotal, setCuotasTotal] = useState('')
+  const [cuotasTotal, setCuotasTotal] = useState('1')
   const [fechaVenc, setFechaVenc] = useState('')
 
   const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
@@ -108,7 +110,7 @@ export default function GastosPage() {
   function resetForm() {
     setMonto(''); setNota(''); setPersona('')
     setDescripcion(''); setCategoriaId(''); setTarjetaId(''); setTipoRecurrencia(null)
-    setEsDeuda(false); setCuotaActual(''); setCuotasTotal(''); setFechaVenc('')
+    setCuotasTotal('1'); setFechaVenc('')
   }
 
   async function guardar() {
@@ -123,9 +125,8 @@ export default function GastosPage() {
       body: JSON.stringify({
         fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId, tarjeta_id: tarjetaId || null,
         monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
-        cuota_actual: esDeuda && cuotaActual ? parseInt(cuotaActual) : null,
-        cuotas_total: esDeuda && cuotasTotal ? parseInt(cuotasTotal) : null,
-        fecha_vencimiento: esDeuda && fechaVenc ? fechaVenc : null,
+        cuotas_total: cuotasTotal && parseInt(cuotasTotal) > 1 ? cuotasTotal : null,
+        fecha_vencimiento: fechaVenc || null,
         es_pago_tarjeta: esPagoTarjetaLocal,
       }),
     })
@@ -262,8 +263,8 @@ export default function GastosPage() {
   }
 
   const gastosFiltrados = gastosFiltradosCalc()
-  const totalMes = gastos.reduce((s, g) => s + g.monto, 0)
-  const totalFiltrado = gastosFiltrados.reduce((s, g) => s + g.monto, 0)
+  const totalMes = gastos.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
+  const totalFiltrado = gastosFiltrados.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
   const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda
 
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
@@ -380,35 +381,33 @@ export default function GastosPage() {
               </div>
             </div>
 
-            <div>
-              <button type="button" onClick={() => setEsDeuda(v => !v)}
-                className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl border transition-colors ${
-                  esDeuda ? 'bg-rose-50 text-rose-600 border-rose-200' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                }`}>
-                💳 {esDeuda ? 'Es una deuda / cuota ✓' : 'Marcar como deuda / cuota'}
-              </button>
-              {esDeuda && (
-                <div className="mt-3 grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Cuota actual</label>
-                    <input type="number" inputMode="numeric" value={cuotaActual}
-                      onChange={e => setCuotaActual(e.target.value)} placeholder="ej: 2"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
+            {tarjetaId && !esPagoTarjeta && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Cuotas</label>
+                    <input type="number" inputMode="numeric" min="1" max="60" value={cuotasTotal}
+                      onChange={e => setCuotasTotal(e.target.value)} placeholder="1"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Total cuotas</label>
-                    <input type="number" inputMode="numeric" value={cuotasTotal}
-                      onChange={e => setCuotasTotal(e.target.value)} placeholder="ej: 12"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Vencimiento</label>
-                    <input type="date" value={fechaVenc} onChange={e => setFechaVenc(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"/>
-                  </div>
+                  {monto && parseInt(cuotasTotal) > 1 && (
+                    <div className="flex-1 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-sm text-blue-700">
+                      <span className="text-xs text-blue-500 block">Por mes</span>
+                      <span className="font-bold">{formatGsCompleto(Math.round(parseInt(monto) / parseInt(cuotasTotal)))}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+                {parseInt(cuotasTotal) > 1 && (
+                  <p className="text-xs text-gray-400">
+                    La 1ª cuota se descuenta en {(() => {
+                      const d = new Date(fecha + 'T12:00:00')
+                      d.setMonth(d.getMonth() + 1)
+                      return d.toLocaleDateString('es-PY', { month: 'long', year: 'numeric' })
+                    })()}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {guardado ? (
@@ -554,9 +553,14 @@ export default function GastosPage() {
                         <span>{g.tarjetas.nombre}</span>
                       </span>
                     )}
-                    {g.cuota_actual && g.cuotas_total && (
+                    {g.es_cuota && g.cuota_num && g.cuotas_total && (
                       <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-medium">
-                        cuota {g.cuota_actual}/{g.cuotas_total}
+                        cuota {g.cuota_num}/{g.cuotas_total}
+                      </span>
+                    )}
+                    {g.excluir_resumen && !g.es_cuota && g.cuotas_total && (
+                      <span className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-medium">
+                        💳 en {g.cuotas_total} cuotas
                       </span>
                     )}
                     <span className="text-xs text-gray-400">{FUENTE_LABEL[g.fuente] ?? ''}</span>
@@ -570,7 +574,9 @@ export default function GastosPage() {
                     )}
                   </p>
                 </div>
-                <span className="font-bold text-gray-800">{formatGsCompleto(g.monto)}</span>
+                <span className={`font-bold ${g.excluir_resumen ? 'text-gray-300 line-through' : 'text-gray-800'}`}>
+                  {formatGsCompleto(g.monto)}
+                </span>
               </div>
             ))}
           </div>

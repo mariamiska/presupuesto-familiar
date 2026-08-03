@@ -89,6 +89,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
     }
 
+    // Actualizar tarjeta para todo el grupo de recurrentes
+    if (body.action === 'actualizar_tarjeta') {
+      const tarjeta_id = body.tarjeta_id ?? null
+      const { data: gastoActual } = await db
+        .from('gastos')
+        .select('suscripcion_id')
+        .eq('id', params.id)
+        .single()
+
+      if (gastoActual?.suscripcion_id) {
+        await db
+          .from('gastos')
+          .update({ tarjeta_id })
+          .eq('suscripcion_id', gastoActual.suscripcion_id)
+      } else {
+        await db.from('gastos').update({ tarjeta_id }).eq('id', params.id)
+      }
+      return NextResponse.json({ ok: true })
+    }
+
     // Actualizar campos permitidos
     const { cuota_actual, cuotas_total, fecha_vencimiento, tipo_recurrencia } = body
     const { data, error } = await db
