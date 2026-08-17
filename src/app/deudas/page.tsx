@@ -246,6 +246,9 @@ export default function DeudasPage() {
         {/* Formulario nueva deuda */}
         {showForm && (
           <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-3">
+            <p className="text-xs text-blue-600 bg-blue-100 rounded-lg px-3 py-2">
+              💡 Si ya registrás las cuotas en <strong>Gastos</strong>, usá el mismo nombre del concepto — este saldo real reemplazará el saldo estimado automáticamente.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
@@ -349,10 +352,15 @@ export default function DeudasPage() {
                 <div key={d.id} className="px-5 py-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold" style={{ color }}>{d.nombre}</p>
                         {d.fuente === 'gasto' && (
-                          <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">desde gastos</span>
+                          <button
+                            onClick={() => abrirEdicion(d)}
+                            className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded hover:bg-amber-100 font-medium"
+                          >
+                            saldo estimado · fijar real →
+                          </button>
                         )}
                       </div>
                       <p className="text-xs text-gray-400">
@@ -375,9 +383,11 @@ export default function DeudasPage() {
                         )}
                       </div>
                       <div className="flex flex-col gap-1">
-                        <button onClick={() => abrirEdicion(d)} className="text-gray-300 hover:text-blue-400">
-                          <Pencil size={14}/>
-                        </button>
+                        {d.fuente === 'deuda' && (
+                          <button onClick={() => abrirEdicion(d)} className="text-gray-300 hover:text-blue-400">
+                            <Pencil size={14}/>
+                          </button>
+                        )}
                         {d.fuente === 'deuda' && (
                           <button onClick={() => archivar(d.id)} className="text-gray-300 hover:text-red-400">
                             <Trash2 size={14}/>
@@ -416,12 +426,21 @@ export default function DeudasPage() {
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
             <div className="px-5 pt-5 pb-2 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800">Actualizar deuda</h3>
+              <h3 className="font-bold text-gray-800">
+                {editando.fuente === 'gasto' ? 'Fijar saldo real' : 'Actualizar deuda'}
+              </h3>
               <button onClick={() => setEditando(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={20}/>
               </button>
             </div>
-            <p className="px-5 text-sm text-gray-500 mb-4">{editando.nombre}</p>
+            <p className="px-5 text-sm text-gray-500">{editando.nombre}</p>
+            {editando.fuente === 'gasto' && (
+              <div className="mx-5 mt-3 mb-1 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 space-y-1">
+                <p className="font-semibold">Saldo estimado: {formatGsCompleto(editando.saldo_actual)}</p>
+                <p>Este saldo se calcula como cuota × cuotas restantes. Ingresá el saldo real según el banco para mayor precisión — se guardará como deuda explícita y reemplazará este estimado.</p>
+              </div>
+            )}
+            <div className="mb-3"/>
             <div className="px-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">

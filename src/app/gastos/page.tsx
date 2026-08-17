@@ -381,7 +381,7 @@ export default function GastosPage() {
               </div>
             </div>
 
-            {tarjetaId && !esPagoTarjeta && (
+            {(tarjetaId || categoriaSeleccionada?.nombre === 'Deudas') && !esPagoTarjeta && (
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
