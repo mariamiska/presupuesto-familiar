@@ -68,8 +68,10 @@ export default function GastosPage() {
   const [filtroPersona, setFiltroPersona] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [busqueda, setBusqueda] = useState('')
-  const [filtroDesde, setFiltroDesde] = useState('')
-  const [filtroHasta, setFiltroHasta] = useState('')
+  const hoy = new Date().toISOString().split('T')[0]
+  const primerDiaMes = `${anioActual}-${String(mesActual).padStart(2, '0')}-01`
+  const [filtroDesde, setFiltroDesde] = useState(primerDiaMes)
+  const [filtroHasta, setFiltroHasta] = useState(hoy)
 
   const [gastoEditando, setGastoEditando] = useState<Gasto | null>(null)
   const [editMonto, setEditMonto] = useState('')
@@ -108,6 +110,17 @@ export default function GastosPage() {
   }, [mesSeleccionado, anioSeleccionado])
 
   useEffect(() => { cargarGastos() }, [cargarGastos])
+
+  // Resetea el rango de fechas cuando cambia el mes/año seleccionado
+  useEffect(() => {
+    const primer = `${anioSeleccionado}-${String(mesSeleccionado).padStart(2, '0')}-01`
+    const esHoy = mesSeleccionado === mesActual && anioSeleccionado === anioActual
+    const ultimo = esHoy
+      ? new Date().toISOString().split('T')[0]
+      : new Date(anioSeleccionado, mesSeleccionado, 0).toISOString().split('T')[0]
+    setFiltroDesde(primer)
+    setFiltroHasta(ultimo)
+  }, [mesSeleccionado, anioSeleccionado])
 
   function resetForm() {
     setMonto(''); setNota(''); setPersona('')
