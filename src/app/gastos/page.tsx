@@ -68,6 +68,8 @@ export default function GastosPage() {
   const [filtroPersona, setFiltroPersona] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [busqueda, setBusqueda] = useState('')
+  const [filtroDesde, setFiltroDesde] = useState('')
+  const [filtroHasta, setFiltroHasta] = useState('')
 
   const [gastoEditando, setGastoEditando] = useState<Gasto | null>(null)
   const [editMonto, setEditMonto] = useState('')
@@ -258,14 +260,16 @@ export default function GastosPage() {
         || (g.nota ?? '').toLowerCase().includes(q)
         || (g.personas?.nombre ?? '').toLowerCase().includes(q)
         || (g.categorias?.nombre ?? '').toLowerCase().includes(q)
-      return matchPersona && matchCategoria && matchBusqueda
+      const matchDesde = !filtroDesde || g.fecha >= filtroDesde
+      const matchHasta = !filtroHasta || g.fecha <= filtroHasta
+      return matchPersona && matchCategoria && matchBusqueda && matchDesde && matchHasta
     })
   }
 
   const gastosFiltrados = gastosFiltradosCalc()
   const totalMes = gastos.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
   const totalFiltrado = gastosFiltrados.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
-  const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda
+  const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda || !!filtroDesde || !!filtroHasta
 
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
@@ -466,11 +470,25 @@ export default function GastosPage() {
             </div>
           </div>
 
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar por descripción, categoría, nota o persona..."
-              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+              <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por descripción, categoría, nota..."
+                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+            </div>
+            <input type="date" value={filtroDesde} onChange={e => setFiltroDesde(e.target.value)}
+              title="Desde"
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-600 w-36"/>
+            <input type="date" value={filtroHasta} onChange={e => setFiltroHasta(e.target.value)}
+              title="Hasta"
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-600 w-36"/>
+            {(filtroDesde || filtroHasta) && (
+              <button onClick={() => { setFiltroDesde(''); setFiltroHasta('') }}
+                className="text-gray-400 hover:text-gray-600 px-2" title="Limpiar fechas">
+                <XCircle size={16}/>
+              </button>
+            )}
           </div>
 
           {/* Filtro por persona */}
