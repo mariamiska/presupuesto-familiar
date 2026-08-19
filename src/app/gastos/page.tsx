@@ -523,63 +523,7 @@ export default function GastosPage() {
             {hayFiltro ? 'Sin resultados para este filtro' : `Sin gastos para ${MESES[mesSeleccionado - 1]} ${anioSeleccionado}`}
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
-            {gastosFiltrados.map(g => (
-              <div key={g.id}
-                className="px-4 py-4 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => abrirEdicion(g)}>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {g.categorias && (
-                      <span className="text-sm" title={g.categorias.nombre}>{g.categorias.icono}</span>
-                    )}
-                    <span className={`font-medium ${g.descripcion ? 'text-gray-800' : 'text-gray-400 italic'}`}>
-                      {g.descripcion || g.nota || '—'}
-                    </span>
-                    {g.tipo_recurrencia && RECURRENCIA_BADGE[g.tipo_recurrencia] && (
-                      <span className={`text-xs border px-1.5 py-0.5 rounded font-medium ${RECURRENCIA_BADGE[g.tipo_recurrencia].cls}`}>
-                        {RECURRENCIA_BADGE[g.tipo_recurrencia].label}
-                      </span>
-                    )}
-                    {g.categorias?.nombre === 'Pago Tarjeta' && (
-                      <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
-                        💳 Pago TC
-                      </span>
-                    )}
-                    {g.tarjetas?.nombre && (
-                      <span className="text-xs bg-slate-800 text-slate-100 border border-slate-700 px-2 py-0.5 rounded-md font-medium flex items-center gap-1.5">
-                        <CreditCard size={11} className="shrink-0" />
-                        <span className="text-slate-400">{g.tarjetas.banco}</span>
-                        <span>{g.tarjetas.nombre}</span>
-                      </span>
-                    )}
-                    {g.es_cuota && g.cuota_num && g.cuotas_total && (
-                      <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded font-medium">
-                        cuota {g.cuota_num}/{g.cuotas_total}
-                      </span>
-                    )}
-                    {g.excluir_resumen && !g.es_cuota && g.cuotas_total && (
-                      <span className="text-xs bg-slate-50 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-medium">
-                        💳 en {g.cuotas_total} cuotas
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-400">{FUENTE_LABEL[g.fuente] ?? ''}</span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
-                    {' · '}{new Date(g.fecha + 'T12:00:00').toLocaleDateString('es-PY')}
-                    {g.nota && ` · ${g.nota}`}
-                    {g.categorias && (
-                      <span className="ml-1" style={{ color: g.categorias.color }}>· {g.categorias.nombre}</span>
-                    )}
-                  </p>
-                </div>
-                <span className={`font-bold ${g.excluir_resumen ? 'text-gray-300 line-through' : 'text-gray-800'}`}>
-                  {formatGsCompleto(g.monto)}
-                </span>
-              </div>
-            ))}
-          </div>
+          <GastosList gastos={gastosFiltrados} onEdit={abrirEdicion} />
         )}
       </div>
 
@@ -722,6 +666,93 @@ export default function GastosPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Lista de gastos agrupada por día ──────────────────────────────────────────
+function GastosList({ gastos, onEdit }: { gastos: Gasto[]; onEdit: (g: Gasto) => void }) {
+  // Agrupar por fecha
+  const grupos = gastos.reduce<Record<string, Gasto[]>>((acc, g) => {
+    const key = g.fecha.split('T')[0]
+    ;(acc[key] ??= []).push(g)
+    return acc
+  }, {})
+
+  const fechasOrdenadas = Object.keys(grupos).sort((a, b) => b.localeCompare(a))
+
+  return (
+    <div>
+      {fechasOrdenadas.map(fecha => {
+        const items = grupos[fecha]
+        const totalDia = items.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
+        const d = new Date(fecha + 'T12:00:00')
+        const label = d.toLocaleDateString('es-PY', { weekday: 'short', day: 'numeric', month: 'short' })
+
+        return (
+          <div key={fecha}>
+            {/* Cabecera de día */}
+            <div className="flex items-center justify-between px-4 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
+              <span className="text-xs font-semibold text-gray-500 capitalize">{label}</span>
+              <span className="text-xs font-medium text-gray-400">{formatGsCompleto(totalDia)}</span>
+            </div>
+
+            {/* Filas compactas */}
+            {items.map(g => (
+              <div key={g.id}
+                className="px-4 py-2 flex items-center gap-3 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                onClick={() => onEdit(g)}>
+
+                {/* Icono categoría */}
+                <span className="text-base shrink-0 w-6 text-center">
+                  {g.categorias?.icono ?? '💸'}
+                </span>
+
+                {/* Info principal */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-sm font-medium truncate ${g.descripcion ? 'text-gray-800' : 'text-gray-400 italic'}`}>
+                      {g.descripcion || g.nota || '—'}
+                    </span>
+                    {g.tarjetas?.nombre && (
+                      <span className="text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium shrink-0">
+                        {g.tarjetas.banco}
+                      </span>
+                    )}
+                    {g.es_cuota && g.cuota_num && g.cuotas_total && (
+                      <span className="text-[11px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded font-medium shrink-0">
+                        {g.cuota_num}/{g.cuotas_total}
+                      </span>
+                    )}
+                    {g.tipo_recurrencia === 'suscripcion' && (
+                      <span className="text-[11px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded font-medium shrink-0">🔄</span>
+                    )}
+                    {g.tipo_recurrencia === 'fijo' && (
+                      <span className="text-[11px] bg-amber-50 text-amber-500 px-1.5 py-0.5 rounded font-medium shrink-0">📌</span>
+                    )}
+                    {g.excluir_resumen && !g.es_cuota && g.cuotas_total && (
+                      <span className="text-[11px] text-gray-400 shrink-0">💳×{g.cuotas_total}</span>
+                    )}
+                    <span className="text-[11px] text-gray-300 shrink-0">{FUENTE_LABEL[g.fuente] ?? ''}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                    <span style={{ color: g.personas?.color }}>{g.personas?.nombre}</span>
+                    {g.categorias?.nombre && (
+                      <span style={{ color: g.categorias.color }}> · {g.categorias.nombre}</span>
+                    )}
+                    {g.nota && g.nota !== g.descripcion && ` · ${g.nota}`}
+                  </p>
+                </div>
+
+                {/* Monto */}
+                <span className={`text-sm font-bold shrink-0 ${g.excluir_resumen ? 'text-gray-300 line-through' : 'text-gray-800'}`}>
+                  {formatGsCompleto(g.monto)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -7,67 +7,90 @@ import {
 } from 'lucide-react'
 
 const nav = [
-  { href: '/',             label: 'Dashboard',      icon: LayoutDashboard },
-  { href: '/gastos',       label: 'Gastos',         icon: PlusCircle },
-  { href: '/recurrentes',  label: 'Recurrentes',    icon: Repeat2 },
-  { href: '/tarjetas',     label: 'Tarjetas',       icon: CreditCard },
-  { href: '/facturas',     label: 'Factura',        icon: Upload },
-  { href: '/simular',      label: 'Simular',        icon: Calculator },
-  { href: '/deudas',       label: 'Deudas',         icon: TrendingDown },
-  { href: '/reportes',     label: 'Reportes',       icon: BarChart2 },
-  { href: '/importar',     label: 'Importar',       icon: FileText },
+  { href: '/',            label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/gastos',      label: 'Gastos',      icon: PlusCircle },
+  { href: '/recurrentes', label: 'Recurrentes', icon: Repeat2 },
+  { href: '/tarjetas',    label: 'Tarjetas',    icon: CreditCard },
+  { href: '/deudas',      label: 'Deudas',      icon: TrendingDown },
+  { href: '/simular',     label: 'Simular',     icon: Calculator },
+  { href: '/reportes',    label: 'Reportes',    icon: BarChart2 },
+  { href: '/facturas',    label: 'Factura',     icon: Upload },
+  { href: '/importar',    label: 'Importar',    icon: FileText },
 ]
+
+// Mobile: los 5 más usados primero (orden distinto al desktop)
+const navMobile = [nav[0], nav[1], nav[3], nav[4], nav[6], nav[2], nav[5], nav[7], nav[8]]
 
 export default function Sidebar() {
   const path = usePathname()
+
   return (
     <>
-      {/* Sidebar desktop */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-[#2C3E50] text-white flex-col shadow-xl z-50">
-        <div className="p-6 border-b border-white/10">
-          <h1 className="text-lg font-bold leading-tight">Presupuesto</h1>
-          <p className="text-xs text-white/50 mt-1">Familia Servin · 2026</p>
+      {/* ── Desktop sidebar ─────────────────────────────────────────── */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col z-50"
+        style={{ background: 'var(--brand)' }}>
+
+        {/* Header */}
+        <div className="px-5 pt-6 pb-5 flex items-center gap-3"
+          style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+            <span className="text-white text-base font-bold leading-none">₲</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-white text-sm font-semibold leading-tight truncate">Presupuesto</p>
+            <p className="text-white/45 text-xs mt-0.5 truncate">Familia Servin · 2026</p>
+          </div>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = path === href
             return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${active ? 'bg-white/15 text-white' : 'text-white/65 hover:bg-white/10 hover:text-white'}`}
-              >
-                <Icon size={16} />
-                {label}
+              <Link key={href} href={href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 relative group"
+                style={{
+                  color:      active ? '#fff' : 'rgba(255,255,255,.55)',
+                  background: active ? 'rgba(255,255,255,.12)' : 'transparent',
+                }}>
+                {/* Accent bar */}
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-white" />
+                )}
+                <Icon size={17} strokeWidth={active ? 2.25 : 1.75}
+                  style={{ opacity: active ? 1 : 0.7 }} />
+                <span>{label}</span>
               </Link>
             )
           })}
         </nav>
-        <div className="p-4 border-t border-white/10 text-xs text-white/40 text-center">
-          Meta ahorro: 5% del ingreso
+
+        {/* Footer */}
+        <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,.3)' }}>Meta ahorro: 5% del ingreso</p>
         </div>
       </aside>
 
-      {/* Bottom nav mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#2C3E50] z-50 flex items-center justify-around border-t border-white/10 safe-area-pb">
-        {nav.slice(0, 5).map(({ href, label, icon: Icon }) => {
-          const active = path === href
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex flex-col items-center gap-1 px-2 py-2.5 min-w-0 flex-1 transition-all relative
-                ${active ? 'text-white' : 'text-white/45'}`}
-            >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />
-              )}
-              <Icon size={21} strokeWidth={active ? 2.5 : 1.75} />
-              <span className={`text-[10px] leading-none truncate ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
-            </Link>
-          )
-        })}
+      {/* ── Mobile bottom nav ───────────────────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 safe-area-pb"
+        style={{ background: 'var(--brand)', borderTop: '1px solid rgba(255,255,255,.08)' }}>
+        <div className="flex overflow-x-auto scrollbar-none"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {navMobile.map(({ href, label, icon: Icon }) => {
+            const active = path === href
+            return (
+              <Link key={href} href={href}
+                className="flex flex-col items-center gap-1 px-3 py-2.5 shrink-0 relative transition-colors"
+                style={{ color: active ? '#fff' : 'rgba(255,255,255,.45)', minWidth: 60 }}>
+                {active && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-white" />
+                )}
+                <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
+                <span className="text-[10px] leading-none font-medium whitespace-nowrap">{label}</span>
+              </Link>
+            )
+          })}
+        </div>
       </nav>
     </>
   )

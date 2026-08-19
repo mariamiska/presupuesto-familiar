@@ -164,6 +164,7 @@ export default function DeudasPage() {
           cuotas_pagadas: pagadas,
           fecha_vencimiento: editando.fecha_vencimiento,
           _skip_persona_lookup: true,
+          _skip_gastos_generacion: true,
         }),
       })
     } else {

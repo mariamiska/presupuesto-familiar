@@ -58,7 +58,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { persona_nombre, _skip_persona_lookup, ...rest } = body
+    const { persona_nombre, _skip_persona_lookup, _skip_gastos_generacion, ...rest } = body
     const db = supabaseAdmin()
 
     let persona_id = rest.persona_id
@@ -78,6 +78,44 @@ export async function POST(req: NextRequest) {
       .select('*, personas(nombre, color)')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Auto-generar gastos mensuales para las cuotas restantes (solo en creación nueva)
+    if (_skip_gastos_generacion) return NextResponse.json(data)
+    const cuotaMensual = rest.cuota_mensual ? parseInt(rest.cuota_mensual) : null
+    const cuotasTotales = rest.cuotas_totales ? parseInt(rest.cuotas_totales) : null
+    const cuotasPagadas = rest.cuotas_pagadas ? parseInt(rest.cuotas_pagadas) : 0
+    const cuotasRestantes = cuotasTotales ? cuotasTotales - cuotasPagadas : 0
+
+    if (cuotaMensual && cuotasRestantes > 0) {
+      const { data: catDeuda } = await db
+        .from('categorias')
+        .select('id')
+        .ilike('nombre', 'deuda%')
+        .limit(1)
+        .single()
+
+      if (catDeuda) {
+        const hoy = new Date()
+        const gastos = Array.from({ length: cuotasRestantes }, (_, i) => {
+          const anio = hoy.getFullYear() + Math.floor((hoy.getMonth() + 1 + i) / 12)
+          const mes = ((hoy.getMonth() + i + 1) % 12) + 1
+          return {
+            fecha: `${anio}-${String(mes).padStart(2, '0')}-01`,
+            descripcion: data.nombre,
+            categoria_id: catDeuda.id,
+            persona_id,
+            monto: cuotaMensual,
+            nota: `Cuota ${cuotasPagadas + i + 1}/${cuotasTotales} - deuda automática`,
+            fuente: 'deuda',
+            pendiente_confirmacion: false,
+            cuota_num: cuotasPagadas + i + 1,
+            cuotas_total: cuotasTotales,
+          }
+        })
+        await db.from('gastos').insert(gastos)
+      }
+    }
+
     return NextResponse.json(data)
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error interno' }, { status: 500 })
