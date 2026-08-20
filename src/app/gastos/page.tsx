@@ -34,10 +34,6 @@ type Gasto = {
   tarjetas?: TarjetaSimple
 }
 
-const RECURRENCIA_BADGE: Record<string, { label: string; cls: string }> = {
-  suscripcion: { label: '🔄 Suscripción', cls: 'bg-purple-50 text-purple-600 border-purple-100' },
-  fijo:        { label: '📌 Fijo',         cls: 'bg-amber-50  text-amber-600  border-amber-100'  },
-}
 
 const mesActual = new Date().getMonth() + 1
 const anioActual = new Date().getFullYear()
