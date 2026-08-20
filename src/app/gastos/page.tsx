@@ -287,6 +287,20 @@ export default function GastosPage() {
   const totalFiltrado = gastosFiltrados.filter(g => !g.excluir_resumen).reduce((s, g) => s + g.monto, 0)
   const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda || !!filtroDesde || !!filtroHasta
 
+  const CATEGORIA_ORDER = [
+    'Tarjeta de Crédito', 'Deudas', 'Pago Tarjeta',
+    'Escuela', 'Fútbol Niños', 'Ropa',
+    'Transporte', 'Alimentación', 'Vivienda',
+  ]
+  const categoriasOrdenadas = [...categorias].sort((a, b) => {
+    const ia = CATEGORIA_ORDER.indexOf(a.nombre)
+    const ib = CATEGORIA_ORDER.indexOf(b.nombre)
+    if (ia === -1 && ib === -1) return 0
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
   const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
@@ -351,7 +365,7 @@ export default function GastosPage() {
                   <span className="text-lg">💳</span>
                   Tarjeta de Crédito
                 </button>
-                {categorias.map(c => (
+                {categoriasOrdenadas.map(c => (
                   <button
                     key={c.id} type="button" onClick={() => setCategoriaId(c.id)}
                     className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
