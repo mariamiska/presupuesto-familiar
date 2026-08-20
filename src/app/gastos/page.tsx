@@ -131,16 +131,15 @@ export default function GastosPage() {
   async function guardar() {
     const montoNum = parseInt(monto)
     const esPagoTarjetaLocal = categorias.find(c => c.id === categoriaId)?.nombre === 'Pago Tarjeta'
-    const esModoTC = categoriaId === '__tc__'
-    if (!montoNum || montoNum <= 0 || !persona || !descripcion || (!categoriaId)) return
+    if (!montoNum || montoNum <= 0 || !persona || !descripcion || !categoriaId) return
     if (esPagoTarjetaLocal && !tarjetaId) return
-    if (esModoTC && !tarjetaId) return
+    if (categorias.find(c => c.id === categoriaId)?.nombre === 'Tarjeta de Crédito' && !tarjetaId) return
     setGuardando(true)
     const res = await fetch('/api/gastos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId === '__tc__' ? null : categoriaId, tarjeta_id: tarjetaId || null,
+        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId, tarjeta_id: tarjetaId || null,
         monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
         cuotas_total: cuotasTotal && parseInt(cuotasTotal) > 1 ? cuotasTotal : null,
         fecha_vencimiento: fechaVenc || null,
@@ -269,7 +268,9 @@ export default function GastosPage() {
     return gastos.filter(g => {
       const matchPersona = !filtroPersona || g.personas?.nombre === filtroPersona
       const matchCategoria = !filtroCategoria
-        || (filtroCategoria === '__tc__' ? !!g.tarjetas : g.categorias?.nombre === filtroCategoria)
+        || (filtroCategoria === '__tc__'
+            ? (!!g.tarjetas || g.categorias?.nombre === 'Tarjeta de Crédito')
+            : g.categorias?.nombre === filtroCategoria)
       const q = busqueda.toLowerCase()
       const matchBusqueda = !q
         || (g.descripcion ?? '').toLowerCase().includes(q)
@@ -290,12 +291,11 @@ export default function GastosPage() {
   const CATEGORIA_ORDER = [
     'Transporte', 'Alimentación', 'Vivienda',
     'Escuela', 'Fútbol Niños', 'Ropa',
-    '__tc__', 'Deudas', 'Pago Tarjeta',
+    'Tarjeta de Crédito', 'Deudas', 'Pago Tarjeta',
   ]
-  const TC_VIRTUAL = { id: '__tc__', nombre: 'Tarjeta de Crédito', icono: '💳', color: '#6366F1' }
-  const categoriasOrdenadas = ([...categorias, TC_VIRTUAL] as (Categoria & { icono: string })[]).sort((a, b) => {
-    const ia = CATEGORIA_ORDER.indexOf(a.id === '__tc__' ? '__tc__' : a.nombre)
-    const ib = CATEGORIA_ORDER.indexOf(b.id === '__tc__' ? '__tc__' : b.nombre)
+  const categoriasOrdenadas = [...categorias].sort((a, b) => {
+    const ia = CATEGORIA_ORDER.indexOf(a.nombre)
+    const ib = CATEGORIA_ORDER.indexOf(b.nombre)
     if (ia === -1 && ib === -1) return 0
     if (ia === -1) return 1
     if (ib === -1) return -1
@@ -305,6 +305,7 @@ export default function GastosPage() {
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
   const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
+  const esCatTC = categoriaSeleccionada?.nombre === 'Tarjeta de Crédito'
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-2xl">
@@ -359,7 +360,7 @@ export default function GastosPage() {
                 {categoriasOrdenadas.map(c => (
                   <button
                     key={c.id} type="button"
-                    onClick={() => setCategoriaId(c.id === '__tc__' ? (categoriaId === '__tc__' ? '' : '__tc__') : c.id)}
+                    onClick={() => setCategoriaId(categoriaId === c.id ? '' : c.id)}
                     className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
                       categoriaId === c.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                     }`}
@@ -370,7 +371,7 @@ export default function GastosPage() {
                   </button>
                 ))}
               </div>
-              {categoriaId === '__tc__' && !tarjetaId && (
+              {categorias.find(c => c.id === categoriaId)?.nombre === 'Tarjeta de Crédito' && !tarjetaId && (
                 <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
                   <span>💳</span> Seleccioná una tarjeta abajo para continuar
                 </p>
@@ -459,11 +460,11 @@ export default function GastosPage() {
             <div className="flex gap-3">
               <button
                 onClick={guardar}
-                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || (esPagoTarjeta && !tarjetaId) || (categoriaId === '__tc__' && !tarjetaId) || guardando}
+                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || (esPagoTarjeta && !tarjetaId) || (esCatTC && !tarjetaId) || guardando}
                 className="flex-1 bg-emerald-600 text-white py-3.5 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95"
               >
                 {guardando && <Loader2 size={18} className="animate-spin"/>}
-                {categoriaId === '__tc__' ? <span>💳</span> : categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
+                {categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
                 Guardar
               </button>
               <button onClick={() => { setShowForm(false); resetForm() }}
@@ -742,14 +743,19 @@ function CategoriasCards({ gastos, total }: { gastos: Gasto[]; total: number }) 
 
   for (const g of gastos) {
     if (g.excluir_resumen) continue
-    const esTarjeta = !!g.tarjetas
+    const esTarjeta = !!g.tarjetas || g.categorias?.nombre === 'Tarjeta de Crédito'
     const key = esTarjeta ? '__tc__' : (g.categorias?.nombre ?? 'Sin categoría')
     const row = mapa.get(key) ?? {
-      icono: esTarjeta ? '💳' : (g.categorias?.icono ?? '💸'),
-      nombre: esTarjeta ? 'Tarjeta de Crédito' : (g.categorias?.nombre ?? 'Sin categoría'),
-      color: esTarjeta ? '#6366F1' : (g.categorias?.color ?? '#94A3B8'),
+      icono: '💳',
+      nombre: 'Tarjeta de Crédito',
+      color: '#6366F1',
       monto: 0,
       count: 0,
+      ...(esTarjeta ? {} : {
+        icono: g.categorias?.icono ?? '💸',
+        nombre: g.categorias?.nombre ?? 'Sin categoría',
+        color: g.categorias?.color ?? '#94A3B8',
+      }),
     }
     row.monto += g.monto
     row.count += 1
