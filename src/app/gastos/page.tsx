@@ -266,7 +266,8 @@ export default function GastosPage() {
   function gastosFiltradosCalc() {
     return gastos.filter(g => {
       const matchPersona = !filtroPersona || g.personas?.nombre === filtroPersona
-      const matchCategoria = !filtroCategoria || g.categorias?.nombre === filtroCategoria
+      const matchCategoria = !filtroCategoria
+        || (filtroCategoria === '__tc__' ? !!g.tarjetas : g.categorias?.nombre === filtroCategoria)
       const q = busqueda.toLowerCase()
       const matchBusqueda = !q
         || (g.descripcion ?? '').toLowerCase().includes(q)
@@ -532,6 +533,13 @@ export default function GastosPage() {
                 }`}>
                 Todas
               </button>
+              <button onClick={() => setFiltroCategoria(filtroCategoria === '__tc__' ? '' : '__tc__')}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  filtroCategoria === '__tc__' ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+                style={filtroCategoria === '__tc__' ? { backgroundColor: '#6366F1', borderColor: '#6366F1' } : {}}>
+                💳 Tarjeta de Crédito
+              </button>
               {categorias.map(c => (
                 <button key={c.id} onClick={() => setFiltroCategoria(filtroCategoria === c.nombre ? '' : c.nombre)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
@@ -711,11 +719,12 @@ function CategoriasCards({ gastos, total }: { gastos: Gasto[]; total: number }) 
 
   for (const g of gastos) {
     if (g.excluir_resumen) continue
-    const key = g.categorias?.nombre ?? 'Sin categoría'
+    const esTarjeta = !!g.tarjetas
+    const key = esTarjeta ? '__tc__' : (g.categorias?.nombre ?? 'Sin categoría')
     const row = mapa.get(key) ?? {
-      icono: g.categorias?.icono ?? '💸',
-      nombre: key,
-      color: g.categorias?.color ?? '#94A3B8',
+      icono: esTarjeta ? '💳' : (g.categorias?.icono ?? '💸'),
+      nombre: esTarjeta ? 'Tarjeta de Crédito' : (g.categorias?.nombre ?? 'Sin categoría'),
+      color: esTarjeta ? '#6366F1' : (g.categorias?.color ?? '#94A3B8'),
       monto: 0,
       count: 0,
     }
