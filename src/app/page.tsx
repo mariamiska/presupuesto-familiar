@@ -26,9 +26,13 @@ function deltaLabel(actual: number, anterior: number) {
   return { pct: `${signo}${pct.toFixed(0)}%`, sube: pct > 0 }
 }
 
-export default async function Dashboard() {
-  const MES_ACTUAL = new Date().getMonth() + 1
-  const ANIO_ACTUAL = new Date().getFullYear()
+export default async function Dashboard({ searchParams }: { searchParams?: { mes?: string; anio?: string } }) {
+  const HOY_MES = new Date().getMonth() + 1
+  const HOY_ANIO = new Date().getFullYear()
+
+  const MES_ACTUAL = parseInt(searchParams?.mes ?? '') || HOY_MES
+  const ANIO_ACTUAL = parseInt(searchParams?.anio ?? '') || HOY_ANIO
+  const esHoy = MES_ACTUAL === HOY_MES && ANIO_ACTUAL === HOY_ANIO
   const mesIdx = MES_ACTUAL - 1
 
   const MES_ANT = MES_ACTUAL === 1 ? 12 : MES_ACTUAL - 1
@@ -126,11 +130,8 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-gray-800">{MESES[mesIdx]} {ANIO_ACTUAL}</h2>
-          <p className="text-sm text-gray-500 mt-1">Resumen del mes actual</p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <NavMes mes={MES_ACTUAL} anio={ANIO_ACTUAL} esHoy={esHoy} />
         {!sinDatos && (
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs md:text-sm font-semibold shrink-0
             ${pct >= 5 ? 'bg-emerald-100 text-emerald-800' : pct >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
@@ -361,6 +362,36 @@ function Card({ label, value, color, sub, icon, delta, deltaInvert }: {
         </p>
       )}
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+// ── Navegación de mes ─────────────────────────────────────────────────────────
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+
+function NavMes({ mes, anio, esHoy }: { mes: number; anio: number; esHoy: boolean }) {
+  const prev = mes === 1 ? { m: 12, a: anio - 1 } : { m: mes - 1, a: anio }
+  const next = mes === 12 ? { m: 1, a: anio + 1 } : { m: mes + 1, a: anio }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Link href={`/?mes=${prev.m}&anio=${prev.a}`}
+        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+        <ChevronLeft size={18}/>
+      </Link>
+      <div className="text-center min-w-[140px]">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800 leading-tight">
+          {MESES[mes - 1]} {anio}
+        </h2>
+        {!esHoy && (
+          <Link href="/" className="text-xs text-blue-500 hover:underline">Volver a hoy</Link>
+        )}
+      </div>
+      <Link href={`/?mes=${next.m}&anio=${next.a}`}
+        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors">
+        <ChevronRight size={18}/>
+      </Link>
     </div>
   )
 }
