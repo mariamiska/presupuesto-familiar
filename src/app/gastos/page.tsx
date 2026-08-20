@@ -131,14 +131,16 @@ export default function GastosPage() {
   async function guardar() {
     const montoNum = parseInt(monto)
     const esPagoTarjetaLocal = categorias.find(c => c.id === categoriaId)?.nombre === 'Pago Tarjeta'
-    if (!montoNum || montoNum <= 0 || !persona || !descripcion || !categoriaId) return
+    const esModoTC = categoriaId === '__tc__'
+    if (!montoNum || montoNum <= 0 || !persona || !descripcion || (!categoriaId)) return
     if (esPagoTarjetaLocal && !tarjetaId) return
+    if (esModoTC && !tarjetaId) return
     setGuardando(true)
     const res = await fetch('/api/gastos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId, tarjeta_id: tarjetaId || null,
+        fecha, persona_nombre: persona, descripcion, categoria_id: categoriaId === '__tc__' ? null : categoriaId, tarjeta_id: tarjetaId || null,
         monto: montoNum, nota, fuente: 'manual', tipo_recurrencia: tipoRecurrencia,
         cuotas_total: cuotasTotal && parseInt(cuotasTotal) > 1 ? cuotasTotal : null,
         fecha_vencimiento: fechaVenc || null,
@@ -339,6 +341,16 @@ export default function GastosPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                <button
+                  type="button" onClick={() => setCategoriaId(categoriaId === '__tc__' ? '' : '__tc__')}
+                  className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
+                    categoriaId === '__tc__' ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                  }`}
+                  style={categoriaId === '__tc__' ? { backgroundColor: '#6366F1', borderColor: '#6366F1' } : {}}
+                >
+                  <span className="text-lg">💳</span>
+                  Tarjeta de Crédito
+                </button>
                 {categorias.map(c => (
                   <button
                     key={c.id} type="button" onClick={() => setCategoriaId(c.id)}
@@ -352,6 +364,11 @@ export default function GastosPage() {
                   </button>
                 ))}
               </div>
+              {categoriaId === '__tc__' && !tarjetaId && (
+                <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
+                  <span>💳</span> Seleccioná una tarjeta abajo para continuar
+                </p>
+              )}
             </div>
 
             {esPagoTarjeta && (
@@ -436,11 +453,11 @@ export default function GastosPage() {
             <div className="flex gap-3">
               <button
                 onClick={guardar}
-                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || (esPagoTarjeta && !tarjetaId) || guardando}
+                disabled={!monto || parseInt(monto) <= 0 || !persona || !descripcion || !categoriaId || (esPagoTarjeta && !tarjetaId) || (categoriaId === '__tc__' && !tarjetaId) || guardando}
                 className="flex-1 bg-emerald-600 text-white py-3.5 rounded-xl font-semibold text-base hover:bg-emerald-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2 active:scale-95"
               >
                 {guardando && <Loader2 size={18} className="animate-spin"/>}
-                {categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
+                {categoriaId === '__tc__' ? <span>💳</span> : categoriaSeleccionada && <span>{categoriaSeleccionada.icono}</span>}
                 Guardar
               </button>
               <button onClick={() => { setShowForm(false); resetForm() }}
