@@ -288,13 +288,14 @@ export default function GastosPage() {
   const hayFiltro = !!filtroPersona || !!filtroCategoria || !!busqueda || !!filtroDesde || !!filtroHasta
 
   const CATEGORIA_ORDER = [
-    'Tarjeta de Crédito', 'Deudas', 'Pago Tarjeta',
-    'Escuela', 'Fútbol Niños', 'Ropa',
     'Transporte', 'Alimentación', 'Vivienda',
+    'Escuela', 'Fútbol Niños', 'Ropa',
+    '__tc__', 'Deudas', 'Pago Tarjeta',
   ]
-  const categoriasOrdenadas = [...categorias].sort((a, b) => {
-    const ia = CATEGORIA_ORDER.indexOf(a.nombre)
-    const ib = CATEGORIA_ORDER.indexOf(b.nombre)
+  const TC_VIRTUAL = { id: '__tc__', nombre: 'Tarjeta de Crédito', icono: '💳', color: '#6366F1' }
+  const categoriasOrdenadas = ([...categorias, TC_VIRTUAL] as (Categoria & { icono: string })[]).sort((a, b) => {
+    const ia = CATEGORIA_ORDER.indexOf(a.id === '__tc__' ? '__tc__' : a.nombre)
+    const ib = CATEGORIA_ORDER.indexOf(b.id === '__tc__' ? '__tc__' : b.nombre)
     if (ia === -1 && ib === -1) return 0
     if (ia === -1) return 1
     if (ib === -1) return -1
@@ -355,19 +356,10 @@ export default function GastosPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                <button
-                  type="button" onClick={() => setCategoriaId(categoriaId === '__tc__' ? '' : '__tc__')}
-                  className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
-                    categoriaId === '__tc__' ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
-                  }`}
-                  style={categoriaId === '__tc__' ? { backgroundColor: '#6366F1', borderColor: '#6366F1' } : {}}
-                >
-                  <span className="text-lg">💳</span>
-                  Tarjeta de Crédito
-                </button>
                 {categoriasOrdenadas.map(c => (
                   <button
-                    key={c.id} type="button" onClick={() => setCategoriaId(c.id)}
+                    key={c.id} type="button"
+                    onClick={() => setCategoriaId(c.id === '__tc__' ? (categoriaId === '__tc__' ? '' : '__tc__') : c.id)}
                     className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-medium border transition-colors ${
                       categoriaId === c.id ? 'text-white border-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
                     }`}
