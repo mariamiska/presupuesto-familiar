@@ -554,7 +554,10 @@ export default function GastosPage() {
             {hayFiltro ? 'Sin resultados para este filtro' : `Sin gastos para ${MESES[mesSeleccionado - 1]} ${anioSeleccionado}`}
           </div>
         ) : (
-          <GastosList gastos={gastosFiltrados} onEdit={abrirEdicion} />
+          <>
+            <CategoriasCards gastos={gastosFiltrados} total={totalFiltrado} />
+            <GastosList gastos={gastosFiltrados} onEdit={abrirEdicion} />
+          </>
         )}
       </div>
 
@@ -697,6 +700,54 @@ export default function GastosPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Cards de totales por categoría ───────────────────────────────────────────
+function CategoriasCards({ gastos, total }: { gastos: Gasto[]; total: number }) {
+  type CatRow = { icono: string; nombre: string; color: string; monto: number; count: number }
+  const mapa = new Map<string, CatRow>()
+
+  for (const g of gastos) {
+    if (g.excluir_resumen) continue
+    const key = g.categorias?.nombre ?? 'Sin categoría'
+    const row = mapa.get(key) ?? {
+      icono: g.categorias?.icono ?? '💸',
+      nombre: key,
+      color: g.categorias?.color ?? '#94A3B8',
+      monto: 0,
+      count: 0,
+    }
+    row.monto += g.monto
+    row.count += 1
+    mapa.set(key, row)
+  }
+
+  const cats = Array.from(mapa.values()).sort((a, b) => b.monto - a.monto)
+  if (cats.length === 0) return null
+
+  return (
+    <div className="px-4 py-3 border-b border-gray-100">
+      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        {cats.map(c => {
+          const pct = total > 0 ? (c.monto / total) * 100 : 0
+          return (
+            <div key={c.nombre}
+              className="shrink-0 bg-gray-50 rounded-xl p-3 min-w-[110px] border border-gray-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-base">{c.icono}</span>
+                <span className="text-[10px] font-semibold text-gray-400">{pct.toFixed(0)}%</span>
+              </div>
+              <p className="text-xs font-semibold text-gray-700 truncate mb-0.5">{c.nombre}</p>
+              <p className="text-xs font-bold text-gray-800">{formatGsCompleto(c.monto)}</p>
+              <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: c.color }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
