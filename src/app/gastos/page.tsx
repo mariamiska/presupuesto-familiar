@@ -60,6 +60,7 @@ export default function GastosPage() {
   const [mesSeleccionado, setMesSeleccionado] = useState(mesActual)
   const [anioSeleccionado, setAnioSeleccionado] = useState(anioActual)
   const [gastos, setGastos] = useState<Gasto[]>([])
+  const [ingresosMes, setIngresosMes] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [filtroPersona, setFiltroPersona] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
@@ -99,9 +100,14 @@ export default function GastosPage() {
 
   const cargarGastos = useCallback(async () => {
     setCargando(true)
-    const res = await fetch(`/api/gastos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`)
-    const data = await res.json()
+    const [resGastos, resIng] = await Promise.all([
+      fetch(`/api/gastos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`),
+      fetch(`/api/ingresos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`),
+    ])
+    const data = await resGastos.json()
+    const { total: ing } = await resIng.json()
     setGastos(Array.isArray(data) ? data : [])
+    setIngresosMes(ing ?? 0)
     setCargando(false)
   }, [mesSeleccionado, anioSeleccionado])
 
@@ -484,6 +490,15 @@ export default function GastosPage() {
                     : `Total: ${formatGsCompleto(totalMes)}`}
                 </p>
               )}
+              {!cargando && ingresosMes > 0 && (() => {
+                const sobrante = ingresosMes - totalMes
+                const positivo = sobrante >= 0
+                return (
+                  <p className={`text-xs font-semibold mt-0.5 ${positivo ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {positivo ? 'Sobrante' : 'Déficit'}: {formatGsCompleto(Math.abs(sobrante))}
+                  </p>
+                )
+              })()}
             </div>
             <div className="flex items-center gap-2">
               {gastos.length > 0 && (
