@@ -46,6 +46,9 @@ export default function GastosPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [rapido, setRapido] = useState('')
+  const [chipActivo, setChipActivo] = useState<string | null>(null)
+  const [chipMonto, setChipMonto] = useState('')
+  const [gastosMesAnterior, setGastosMesAnterior] = useState<Gasto[]>([])
   const [masOpciones, setMasOpciones] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
@@ -103,10 +106,15 @@ export default function GastosPage() {
 
   const cargarGastos = useCallback(async () => {
     setCargando(true)
-    const [resGastos, resIng] = await Promise.all([
+    const mesAnt  = mesSeleccionado === 1 ? 12 : mesSeleccionado - 1
+    const anioAnt = mesSeleccionado === 1 ? anioSeleccionado - 1 : anioSeleccionado
+    const [resGastos, resIng, resAnt] = await Promise.all([
       fetch(`/api/gastos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`),
       fetch(`/api/ingresos?mes=${mesSeleccionado}&anio=${anioSeleccionado}`),
+      fetch(`/api/gastos?mes=${mesAnt}&anio=${anioAnt}`),
     ])
+    const dataAnt = await resAnt.json()
+    setGastosMesAnterior(Array.isArray(dataAnt) ? dataAnt : [])
     const data = await resGastos.json()
     const { total: ing } = await resIng.json()
     setGastos(Array.isArray(data) ? data : [])
@@ -141,6 +149,26 @@ export default function GastosPage() {
     setFecha(new Date().toISOString().split('T')[0])
     setShowForm(true)
     setRapido('')
+  }
+
+  // Guarda un gasto frecuente sin abrir el formulario: reusa persona y
+  // categoría del último registro igual y sólo pide el monto.
+  async function guardarChip(f: Frecuente, montoTexto: string) {
+    const montoNum = parseInt(montoTexto.replace(/[.,]/g, ''), 10)
+    if (!montoNum || montoNum <= 0 || !f.persona || !f.categoriaId) return
+    setGuardando(true)
+    const res = await fetch('/api/gastos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fecha: new Date().toISOString().split('T')[0],
+        persona_nombre: f.persona, descripcion: f.descripcion,
+        categoria_id: f.categoriaId, tarjeta_id: null,
+        monto: montoNum, nota: '', fuente: 'manual',
+      }),
+    })
+    setGuardando(false)
+    if (res.ok) { setChipActivo(null); setChipMonto(''); cargarGastos() }
   }
 
   async function guardar() {
@@ -317,16 +345,36 @@ export default function GastosPage() {
     return ia - ib
   })
 
-  // Atajos: lo que más se repite en el período a la vista, para cargarlo de un toque.
+  // Atajos: lo que más se repite en el período a la vista. Guardan persona y
+  // categoría del último registro igual, así el chip sólo tiene que pedir el monto.
+  type Frecuente = {
+    descripcion: string; icono: string; veces: number
+    persona: string; categoriaId: string; monto: number
+  }
   const frecuentes = Object.values(
     gastos.reduce((acc, g) => {
       const d = g.descripcion?.trim()
       if (!d) return acc
-      acc[d] ??= { descripcion: d, icono: g.categorias?.icono ?? '', veces: 0 }
+      acc[d] ??= {
+        descripcion: d,
+        icono: g.categorias?.icono ?? '',
+        veces: 0,
+        persona: g.personas?.nombre ?? '',
+        categoriaId: categorias.find(c => c.nombre === g.categorias?.nombre)?.id ?? '',
+        monto: g.monto,
+      }
       acc[d].veces++
       return acc
-    }, {} as Record<string, { descripcion: string; icono: string; veces: number }>),
+    }, {} as Record<string, Frecuente>),
   ).sort((a, b) => b.veces - a.veces).slice(0, 6)
+
+  // Gasto por categoría, este mes contra el anterior.
+  // Para comparar cada categoría contra el mes anterior.
+  const totalAnteriorPorCat: Record<string, number> = gastosMesAnterior.reduce((acc, g) => {
+    const n = g.categorias?.nombre ?? 'Sin categoría'
+    acc[n] = (acc[n] ?? 0) + g.monto
+    return acc
+  }, {} as Record<string, number>)
 
   // Lo que pesa cada mes no es el saldo de la deuda, son las cuotas que se pagan.
   const cuotasDeudaMes = gastos
@@ -369,9 +417,24 @@ export default function GastosPage() {
         </form>
         {frecuentes.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {frecuentes.map(f => (
-              <button key={f.descripcion} onClick={() => aplicarRapido(f.descripcion)}
-                className="text-xs bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:bg-gray-100 active:scale-95">
+            {frecuentes.map(f => chipActivo === f.descripcion ? (
+              <form key={f.descripcion} className="flex items-center gap-1"
+                onSubmit={e => { e.preventDefault(); guardarChip(f, chipMonto) }}>
+                <span className="text-xs text-[var(--text-2)]">{f.icono} {f.descripcion}</span>
+                <input
+                  autoFocus type="text" inputMode="numeric" value={chipMonto}
+                  onChange={e => setChipMonto(e.target.value)}
+                  onBlur={() => { if (!chipMonto) setChipActivo(null) }}
+                  placeholder={String(f.monto)}
+                  aria-label={`Monto para ${f.descripcion}`}
+                  className="w-24 border border-[var(--brand-mid)] rounded-full px-3 py-1 text-xs focus:outline-none"
+                />
+                <button type="submit" disabled={!chipMonto || guardando}
+                  className="chip chip-on text-xs disabled:opacity-40">OK</button>
+              </form>
+            ) : (
+              <button key={f.descripcion} className="chip"
+                onClick={() => { setChipActivo(f.descripcion); setChipMonto('') }}>
                 {f.icono} {f.descripcion}
               </button>
             ))}
@@ -670,7 +733,7 @@ export default function GastosPage() {
           </div>
         ) : (
           <>
-            <CategoriasCards gastos={gastosFiltrados} total={totalFiltrado} />
+            <CategoriasCards gastos={gastosFiltrados} total={totalFiltrado} anterior={totalAnteriorPorCat} />
             <GastosList gastos={gastosFiltrados} onEdit={abrirEdicion} />
           </>
         )}
@@ -820,7 +883,7 @@ export default function GastosPage() {
 }
 
 // ── Cards de totales por categoría ───────────────────────────────────────────
-function CategoriasCards({ gastos, total }: { gastos: Gasto[]; total: number }) {
+function CategoriasCards({ gastos, total, anterior }: { gastos: Gasto[]; total: number; anterior: Record<string, number> }) {
   type CatRow = { icono: string; nombre: string; color: string; monto: number; count: number }
   const mapa = new Map<string, CatRow>()
 
@@ -860,8 +923,22 @@ function CategoriasCards({ gastos, total }: { gastos: Gasto[]; total: number }) 
                 <span className="text-base">{c.icono}</span>
                 <span className="text-[10px] font-semibold text-gray-400">{pct.toFixed(0)}%</span>
               </div>
-              <p className="text-xs font-semibold text-gray-700 truncate mb-0.5">{c.nombre}</p>
-              <p className="text-xs font-bold text-gray-800">{formatGsCompleto(c.monto)}</p>
+              <p className="text-xs font-semibold text-[var(--text-2)] truncate mb-0.5">{c.nombre}</p>
+              <p className="text-xs font-bold text-[var(--text-1)]">{formatGsCompleto(c.monto)}</p>
+              {(() => {
+                // Delta contra el mes anterior: gastar menos es bueno, por eso
+                // el verde va en la baja.
+                const ant = anterior[c.nombre]
+                if (!ant) return null
+                const d = Math.round(((c.monto - ant) / ant) * 100)
+                if (d === 0) return <p className="text-[10px] text-[var(--text-3)] mt-0.5">igual que el mes pasado</p>
+                return (
+                  <p className="text-[10px] mt-0.5 font-semibold"
+                    style={{ color: d > 0 ? 'var(--bad)' : 'var(--ok)' }}>
+                    {d > 0 ? '▲' : '▼'} {Math.abs(d)}% vs mes anterior
+                  </p>
+                )
+              })()}
               <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: c.color }} />
               </div>

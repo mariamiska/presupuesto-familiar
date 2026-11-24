@@ -3,15 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --brand:        #2C3E50;
-  --brand-mid:    #344d63;
-  --brand-light:  rgba(255,255,255,0.08);
+  --brand:        #1E3A5F;
+  --brand-mid:    #2C5282;
+  --brand-soft:   #EEF4FB;
+  --brand-light:  rgba(255,255,255,0.10);
   --surface:      #ffffff;
-  --surface-muted:#F8FAFC;
-  --border:       #E8EDF2;
-  --text-1:       #0F172A;
-  --text-2:       #475569;
-  --text-3:       #94A3B8;
+  --surface-muted:#F6F8FB;
+  --border:       #E3E9F0;
+  --border-soft:  #EFF3F8;
+  --text-1:       #10203A;
+  --text-2:       #51607A;
+  --text-3:       #8E9BB0;
+  /* Acentos: contraste AA sobre blanco */
+  --ok:           #0E7C5A;
+  --ok-soft:      #E6F6F0;
+  --warn:         #B45309;
+  --warn-soft:    #FEF3E2;
+  --bad:          #C0334D;
+  --bad-soft:     #FDECEF;
   --shadow-card:  0 1px 3px 0 rgba(0,0,0,.06), 0 1px 2px -1px rgba(0,0,0,.04);
   --shadow-lg:    0 4px 16px -2px rgba(0,0,0,.10);
   --radius:       12px;
@@ -41,5 +50,77 @@ body {
 @layer utilities {
   .text-balance   { text-wrap: balance; }
   .safe-area-pb   { padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .card           { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-card); border: 1px solid var(--border); }
+}
+
+/* Componentes que se repiten en todas las páginas. Centralizarlos acá evita
+   que cada pantalla invente su propio borde, radio y sombra. */
+@layer components {
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border);
+  }
+  .card-pad { @apply card p-4 md:p-5; }
+
+  .input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--text-1);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--brand-mid);
+    box-shadow: 0 0 0 3px var(--brand-soft);
+  }
+  .input::placeholder { color: var(--text-3); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    border-radius: var(--radius);
+    padding: 0.8rem 1.1rem;
+    font-weight: 600; font-size: .95rem;
+    transition: background .15s, transform .08s, opacity .15s;
+  }
+  .btn:active:not(:disabled) { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary { @apply btn; background: var(--brand); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--brand-mid); }
+
+  .btn-ok { @apply btn; background: var(--ok); color: #fff; }
+  .btn-ok:hover:not(:disabled) { filter: brightness(1.08); }
+
+  .btn-ghost {
+    @apply btn;
+    background: transparent; color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-muted); }
+
+  /* Píldora de filtro / atajo */
+  .chip {
+    display: inline-flex; align-items: center; gap: .35rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: .4rem .8rem;
+    font-size: .8rem; font-weight: 500;
+    color: var(--text-2);
+    transition: background .15s, border-color .15s, transform .08s;
+  }
+  .chip:hover { background: var(--surface-muted); }
+  .chip:active { transform: scale(.96); }
+  .chip-on { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .chip-on:hover { background: var(--brand-mid); }
+}
+
+/* Áreas de toque cómodas en teléfono */
+@media (max-width: 640px) {
+  button, [role="button"], a.btn, .chip { min-height: 40px; }
 }
