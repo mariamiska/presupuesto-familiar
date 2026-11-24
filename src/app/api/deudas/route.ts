@@ -94,7 +94,14 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .single()
 
-      if (catDeuda) {
+      // Verificar que no existan ya gastos generados para esta deuda (evita duplicados)
+      const { count } = await db
+        .from('gastos')
+        .select('id', { count: 'exact', head: true })
+        .eq('descripcion', data.nombre)
+        .like('nota', '[cuota-deuda]%')
+
+      if (catDeuda && (count ?? 0) === 0) {
         const hoy = new Date()
         const gastos = Array.from({ length: cuotasRestantes }, (_, i) => {
           const anio = hoy.getFullYear() + Math.floor((hoy.getMonth() + 1 + i) / 12)
@@ -105,8 +112,8 @@ export async function POST(req: NextRequest) {
             categoria_id: catDeuda.id,
             persona_id,
             monto: cuotaMensual,
-            nota: `Cuota ${cuotasPagadas + i + 1}/${cuotasTotales} - deuda automática`,
-            fuente: 'deuda',
+            nota: `[cuota-deuda] Cuota ${cuotasPagadas + i + 1}/${cuotasTotales}`,
+            fuente: 'manual',
             pendiente_confirmacion: false,
             cuota_num: cuotasPagadas + i + 1,
             cuotas_total: cuotasTotales,

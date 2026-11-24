@@ -79,6 +79,7 @@ export default function DeudasPage() {
 
   async function cargarDeudas() {
     setCargando(true)
+    await fetch('/api/deudas/sync', { method: 'POST' })
     const res = await fetch('/api/deudas')
     const data = await res.json()
     setDeudas(Array.isArray(data) ? data : [])
