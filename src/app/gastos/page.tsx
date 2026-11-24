@@ -328,6 +328,11 @@ export default function GastosPage() {
     }, {} as Record<string, { descripcion: string; icono: string; veces: number }>),
   ).sort((a, b) => b.veces - a.veces).slice(0, 6)
 
+  // Lo que pesa cada mes no es el saldo de la deuda, son las cuotas que se pagan.
+  const cuotasDeudaMes = gastos
+    .filter(g => g.categorias?.nombre === 'Deudas')
+    .reduce((s, g) => s + g.monto, 0)
+
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
   const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
@@ -549,12 +554,21 @@ export default function GastosPage() {
                 </p>
               )}
               {!cargando && ingresosMes > 0 && (() => {
+                // El sobrante compara gastos contra lo ganado. Un préstamo entra a la
+                // cuenta pero es deuda, así que se muestra aparte y no lo maquilla.
                 const sobrante = ingresosMes - totalMes
                 const positivo = sobrante >= 0
                 return (
-                  <p className={`text-xs font-semibold mt-0.5 ${positivo ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {positivo ? 'Sobrante' : 'Déficit'}: {formatGsCompleto(Math.abs(sobrante))}
-                  </p>
+                  <>
+                    <p className={`text-xs font-semibold mt-0.5 ${positivo ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {positivo ? 'Sobrante' : 'Déficit'}: {formatGsCompleto(Math.abs(sobrante))}
+                    </p>
+                    {cuotasDeudaMes > 0 && (
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        Cuotas de deuda este mes: {formatGsCompleto(cuotasDeudaMes)}
+                      </p>
+                    )}
+                  </>
                 )
               })()}
             </div>
