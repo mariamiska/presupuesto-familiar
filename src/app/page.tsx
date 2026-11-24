@@ -19,6 +19,36 @@ function ultimoDia(anio: number, mes: number) {
   return new Date(anio, mes, 0).toISOString().split('T')[0]
 }
 
+function ultimoDiaHabil(anio: number, mes: number) {
+  const d = new Date(anio, mes, 0)
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
+  return d.getDate()
+}
+
+// Saldo acumulado día a día: los sueldos entran el último día hábil pero casi todos
+// los pagos caen entre el 1 y el 15, así que el mes toca su piso antes de cobrar.
+// ponytail: arranca en 0 el día 1, no arrastra el saldo real de la cuenta.
+// Upgrade: guardar un saldo de apertura por mes y sumarlo acá.
+function flujoCaja(
+  ingresos: { monto: number; dia?: number | null }[],
+  gastos: { monto: number; fecha: string }[],
+  anio: number,
+  mes: number,
+) {
+  const dias = new Date(anio, mes, 0).getDate()
+  const porDefecto = ultimoDiaHabil(anio, mes)
+  const delta = Array(dias + 1).fill(0)
+  ingresos.forEach(i => { delta[Math.min(i.dia ?? porDefecto, dias)] += i.monto })
+  gastos.forEach(g => { delta[Math.min(parseInt(g.fecha.slice(8, 10)), dias)] -= g.monto })
+
+  let saldo = 0, piso = Infinity, diaPiso = 1
+  for (let d = 1; d <= dias; d++) {
+    saldo += delta[d]
+    if (saldo < piso) { piso = saldo; diaPiso = d }
+  }
+  return { piso, diaPiso, cierre: saldo, diaSueldo: porDefecto }
+}
+
 function deltaLabel(actual: number, anterior: number) {
   if (anterior === 0) return null
   const pct = ((actual - anterior) / anterior) * 100
@@ -52,8 +82,8 @@ export default async function Dashboard({ searchParams }: { searchParams?: { mes
     { data: gastosAnuales },
     { data: deudasActivas },
   ] = await Promise.all([
-    db.from('ingresos').select('monto').eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
-    db.from('gastos').select('monto, persona_id, personas(nombre, color)')
+    db.from('ingresos').select('*').eq('mes', MES_ACTUAL).eq('anio', ANIO_ACTUAL),
+    db.from('gastos').select('monto, fecha, persona_id, personas(nombre, color)')
       .gte('fecha', primerDia(ANIO_ACTUAL, MES_ACTUAL))
       .lte('fecha', ultimoDia(ANIO_ACTUAL, MES_ACTUAL))
       .not('excluir_resumen', 'is', true),
@@ -125,6 +155,12 @@ export default async function Dashboard({ searchParams }: { searchParams?: { mes
 
   const deltaIng = deltaLabel(ingMes, ingAnt)
   const deltaGast = deltaLabel(gastMes, gastAnt)
+
+  const flujo = flujoCaja(
+    (ingresosData ?? []) as { monto: number; dia?: number | null }[],
+    (gastosData ?? []) as unknown as { monto: number; fecha: string }[],
+    ANIO_ACTUAL, MES_ACTUAL,
+  )
 
   const hoy = new Date()
 
@@ -198,6 +234,24 @@ export default async function Dashboard({ searchParams }: { searchParams?: { mes
                 No hay gastos reales para {MESES[mesIdx]}. <a href="/gastos" className="underline ml-1">Agregar gastos</a>
               </div>
             )}
+          </div>
+          <div className={`bg-white rounded-xl p-5 shadow-sm border ${flujo.piso < 0 ? 'border-red-100' : 'border-gray-100'}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet size={16} className={flujo.piso < 0 ? 'text-red-500' : 'text-emerald-500'}/>
+              <h3 className="font-semibold text-gray-700">Flujo de caja — {MESES[mesIdx]}</h3>
+            </div>
+            <div className={`rounded-lg px-4 py-3.5 ${flujo.piso < 0 ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+              <p className="text-sm text-gray-700">
+                Punto más bajo: <span className="font-semibold">{flujo.diaPiso} de {MESES[mesIdx]}</span>
+              </p>
+              <p className={`text-xl font-bold mt-0.5 ${flujo.piso < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {formatGsCompleto(flujo.piso)}
+              </p>
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              Los sueldos entran el {flujo.diaSueldo} (último día hábil), pero la mayoría de los pagos
+              caen antes. No incluye el saldo que viene del mes anterior.
+            </p>
           </div>
         </>
       )}

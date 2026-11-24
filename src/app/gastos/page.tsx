@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { parseGasto } from '@/lib/parse-gasto'
 import { Plus, CheckCircle, Loader2, X, CreditCard, Trash2, Download, Search, Repeat2, XCircle } from 'lucide-react'
 import { MESES, formatGsCompleto } from '@/lib/supabase'
 
@@ -44,6 +45,8 @@ export default function GastosPage() {
   const [tarjetas, setTarjetas] = useState<TarjetaSimple[]>([])
 
   const [showForm, setShowForm] = useState(false)
+  const [rapido, setRapido] = useState('')
+  const [masOpciones, setMasOpciones] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
   const [persona, setPersona] = useState('')
@@ -124,7 +127,20 @@ export default function GastosPage() {
   function resetForm() {
     setMonto(''); setNota(''); setPersona('')
     setDescripcion(''); setCategoriaId(''); setTarjetaId(''); setTipoRecurrencia(null)
-    setCuotasTotal('1'); setFechaVenc('')
+    setCuotasTotal('1'); setFechaVenc(''); setMasOpciones(false)
+  }
+
+  // Carga rápida: una línea dictada ("150000 nafta augusto") llena el formulario.
+  function aplicarRapido(texto: string) {
+    const hist = gastos.map(g => ({ descripcion: g.descripcion, categoria: g.categorias?.nombre ?? null }))
+    const r = parseGasto(texto, personas, categorias, hist)
+    if (r.monto) setMonto(String(r.monto))
+    if (r.descripcion) setDescripcion(r.descripcion)
+    if (r.personaNombre) setPersona(r.personaNombre)
+    if (r.categoriaId) setCategoriaId(r.categoriaId)
+    setFecha(new Date().toISOString().split('T')[0])
+    setShowForm(true)
+    setRapido('')
   }
 
   async function guardar() {
@@ -301,6 +317,17 @@ export default function GastosPage() {
     return ia - ib
   })
 
+  // Atajos: lo que más se repite en el período a la vista, para cargarlo de un toque.
+  const frecuentes = Object.values(
+    gastos.reduce((acc, g) => {
+      const d = g.descripcion?.trim()
+      if (!d) return acc
+      acc[d] ??= { descripcion: d, icono: g.categorias?.icono ?? '', veces: 0 }
+      acc[d].veces++
+      return acc
+    }, {} as Record<string, { descripcion: string; icono: string; veces: number }>),
+  ).sort((a, b) => b.veces - a.veces).slice(0, 6)
+
   const categoriaSeleccionada = categorias.find(c => c.id === categoriaId)
   const editCategoriaSeleccionada = categorias.find(c => c.id === editCategoriaId)
   const esPagoTarjeta = categoriaSeleccionada?.nombre === 'Pago Tarjeta'
@@ -319,6 +346,32 @@ export default function GastosPage() {
         >
           <Plus size={18}/> Nuevo gasto
         </button>
+      </div>
+
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 space-y-3">
+        <form onSubmit={e => { e.preventDefault(); if (rapido.trim()) aplicarRapido(rapido) }}
+          className="flex gap-2">
+          <input
+            value={rapido} onChange={e => setRapido(e.target.value)}
+            placeholder="150000 nafta augusto"
+            aria-label="Carga rápida: monto, descripción y persona en una línea"
+            className="flex-1 border border-gray-200 rounded-xl px-4 py-3.5 text-base focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+          <button type="submit" disabled={!rapido.trim()}
+            className="bg-[#2C3E50] text-white px-5 rounded-xl font-semibold hover:bg-[#34495E] disabled:opacity-40 active:scale-95">
+            <Plus size={18}/>
+          </button>
+        </form>
+        {frecuentes.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {frecuentes.map(f => (
+              <button key={f.descripcion} onClick={() => aplicarRapido(f.descripcion)}
+                className="text-xs bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:bg-gray-100 active:scale-95">
+                {f.icono} {f.descripcion}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -404,6 +457,13 @@ export default function GastosPage() {
               </div>
             </div>
 
+            <button type="button" onClick={() => setMasOpciones(!masOpciones)}
+              aria-expanded={masOpciones}
+              className="text-sm text-gray-500 hover:text-gray-700 underline">
+              {masOpciones ? 'Menos opciones' : 'Más opciones (cuotas, vencimiento, nota)'}
+            </button>
+
+            <div className={masOpciones ? 'space-y-3' : 'hidden'}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de gasto</label>
               <div className="flex gap-2">
@@ -449,6 +509,7 @@ export default function GastosPage() {
                 )}
               </div>
             )}
+          </div>
           </div>
 
           {guardado ? (
