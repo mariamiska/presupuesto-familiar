@@ -109,6 +109,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ ok: true })
     }
 
+    // Marcar/desmarcar como pagado desde la planilla de pagos
+    if (typeof body.pagado === 'boolean') {
+      const { data, error } = await db
+        .from('gastos')
+        .update({ pagado: body.pagado, pagado_at: body.pagado ? new Date().toISOString() : null })
+        .eq('id', params.id)
+        .select('id, pagado, pagado_at')
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(data)
+    }
+
     // Actualizar campos permitidos
     const { cuota_actual, cuotas_total, fecha_vencimiento, tipo_recurrencia } = body
     const { data, error } = await db
